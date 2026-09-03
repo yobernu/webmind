@@ -3,11 +3,13 @@
   "name": "WebMind",
   "version": "0.1.0",
   "description": "Your persistent AI workspace for the web.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArO+VivzE4LHad7RmIaAG/D3vteEPfVaPDXgsfqx0yvHKdy9kpXeiFauUB3RrlPYY3ADPq2NRRMn8xLakT7L4WuWTUX/IJPzs7IJe5/Nc4bnacrAUW59rgQ2ojmjl76rmzvWeE/nWRR9pIBK/mDD71OGPMEHc9uUL2/d6LAqpzpR75sbasfRHx262LoblGWnKvj8EcT/tbz61CsBKvDmpSwtqv3ZsACgpsyYHZH2DxShzfLk39Fo4ca9g7dSVCQSM2JzEPXHX+nWAgpQgsfvYKTshUgzF1tpabCkpUjbmsUBpnqffJRm4hnr/Xv4+FKubmVlnq8WLQ/NOqca5yQOnFQIDAQAB",
   "permissions": [
     "storage",
     "activeTab",
     "scripting",
-    "sidePanel"
+    "sidePanel",
+    "identity"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -24,8 +26,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]

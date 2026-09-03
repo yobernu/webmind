@@ -2,12 +2,14 @@ import { useState, type ReactNode } from "react";
 import Splash from "../components/Splash";
 import type { WorkspaceTab } from "../types";
 import { prettyUrl } from "../utils/url";
+import AuthPanel from "./components/AuthPanel";
 import Chat from "./components/Chat";
 import Highlights from "./components/Highlights";
 import History from "./components/History";
 import Notes from "./components/Notes";
 import "./sidepanel.css";
 import { useBoot } from "./useBoot";
+import { useSession } from "./useSession";
 
 const TABS: { id: WorkspaceTab; label: string }[] = [
   { id: "chat", label: "Chat" },
@@ -17,8 +19,11 @@ const TABS: { id: WorkspaceTab; label: string }[] = [
 ];
 
 export default function App() {
-  const { phase, status, page } = useBoot();
+  const session = useSession();
+  const { phase, status, page } = useBoot(session.status !== "restoring");
   const [tab, setTab] = useState<WorkspaceTab>("chat");
+
+  const signedIn = session.status === "signed-in";
 
   const panels: Record<WorkspaceTab, ReactNode> = {
     chat: <Chat page={page} />,
@@ -42,23 +47,40 @@ export default function App() {
           </div>
         </header>
 
-        <nav className="panel-tabs" role="tablist" aria-label="Workspace">
-          {TABS.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              onClick={() => setTab(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
+        {signedIn ? (
+          <>
+            <div className="panel-account">
+              <span title={session.user?.email}>
+                {session.user?.name || session.user?.email}
+              </span>
+              <button type="button" onClick={() => void session.signOut()}>
+                Sign out
+              </button>
+            </div>
 
-        <main className="panel-body" role="tabpanel">
-          {panels[tab]}
-        </main>
+            <nav className="panel-tabs" role="tablist" aria-label="Workspace">
+              {TABS.map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === id}
+                  onClick={() => setTab(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+
+            <main className="panel-body" role="tabpanel">
+              {panels[tab]}
+            </main>
+          </>
+        ) : (
+          <main className="panel-body">
+            <AuthPanel session={session} />
+          </main>
+        )}
 
         {/* <h>Yoseph Berhanu Here</h> */}
       </div>

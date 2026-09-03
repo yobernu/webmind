@@ -12,15 +12,21 @@ import {
   EMAIL_TAKEN_MESSAGE,
   INVALID_CREDENTIALS_MESSAGE,
 } from '../constants/auth.constants.js';
-import { UsersService } from '../../users/services/users.service.js';
+import { AuthProvider } from '../../generated/prisma/enums.js';
+import {
+  UsersService,
+  type ProviderProfile,
+} from '../../users/services/users.service.js';
 import { RegisterDto } from '../dto/register.dto.js';
 import { LoginDto } from '../dto/login.dto.js';
+import { GoogleAuthService } from './google-auth.service.js';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly googleAuthService: GoogleAuthService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -36,7 +42,7 @@ export class AuthService {
 
     const user = await this.usersService.createUser(email, passwordHash);
 
-    return this.generateAuthResponse(user.id, user.email);
+    return this.generateAuthResponse(user);
   }
 
   async login(dto: LoginDto) {
@@ -55,7 +61,76 @@ export class AuthService {
       throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
     }
 
-    return this.generateAuthResponse(user.id, user.email);
+    return this.generateAuthResponse(user);
+  }
+
+  /**
+   * Exchanges a Google ID token from the extension for a WebMind session.
+   *
+   * Resolution order: the linked Google identity, then an existing account with
+   * the same (Google-verified) email, then a brand new account.
+   */
+  async loginWithGoogle(idToken: string) {
+    const identity = await this.googleAuthService.verifyIdToken(idToken);
+
+    const profile: ProviderProfile = {
+      email: identity.email,
+      name: identity.name,
+      avatarUrl: identity.avatarUrl,
+      emailVerified: identity.emailVerified,
+      provider: AuthProvider.GOOGLE,
+      providerAccountId: identity.sub,
+    };
+
+    const user = await this.resolveProviderUser(profile);
+
+    return this.generateAuthResponse(user);
+  }
+
+  private async resolveProviderUser(profile: ProviderProfile) {
+    const linked = await this.usersService.findByProviderAccount(
+      profile.provider,
+      profile.providerAccountId,
+    );
+
+    if (linked) {
+      return linked;
+    }
+
+    const byEmail = await this.usersService.findByEmail(profile.email);
+
+    if (byEmail) {
+      // Safe to adopt: the provider vouched for this email address, which
+      // verifyIdToken already required.
+      return this.usersService.linkIdentity(byEmail.id, profile);
+    }
+
+    try {
+      return await this.usersService.createWithIdentity(profile);
+    } catch (cause) {
+      // Two first-time sign-ins racing each other: whichever loses the unique
+      // constraint reads the row the winner just wrote.
+      if (!isUniqueConstraintViolation(cause)) {
+        throw cause;
+      }
+
+      const created = await this.usersService.findByProviderAccount(
+        profile.provider,
+        profile.providerAccountId,
+      );
+
+      if (created) {
+        return created;
+      }
+
+      const existing = await this.usersService.findByEmail(profile.email);
+
+      if (!existing) {
+        throw cause;
+      }
+
+      return existing;
+    }
   }
 
   async validateUser(userId: string) {
@@ -66,26 +141,44 @@ export class AuthService {
       throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
     }
 
-    return {
-      id: user.id,
-      email: user.email,
-    };
+    return toPublicUser(user);
   }
 
-  private async generateAuthResponse(userId: string, email: string) {
-    const payload = {
-      sub: userId,
-      email,
-    };
-
-    const accessToken = await this.jwtService.signAsync(payload);
+  private async generateAuthResponse(user: PublicUserSource) {
+    const accessToken = await this.jwtService.signAsync({
+      sub: user.id,
+      email: user.email,
+    });
 
     return {
       accessToken,
-      user: {
-        id: userId,
-        email,
-      },
+      user: toPublicUser(user),
     };
   }
+}
+
+interface PublicUserSource {
+  id: string;
+  email: string;
+  name: string | null;
+  avatarUrl: string | null;
+}
+
+/** The account fields the extension is allowed to see. */
+function toPublicUser(user: PublicUserSource) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatarUrl: user.avatarUrl,
+  };
+}
+
+/** Prisma's unique-constraint code, without importing the error class here. */
+function isUniqueConstraintViolation(cause: unknown): boolean {
+  return (
+    typeof cause === 'object' &&
+    cause !== null &&
+    (cause as { code?: unknown }).code === 'P2002'
+  );
 }

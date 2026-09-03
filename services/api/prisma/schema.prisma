@@ -14,12 +14,48 @@ datasource db {
   provider = "postgresql"
 }
 
+enum AuthProvider {
+  GOOGLE
+}
+
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id String @id @default(uuid())
+
+  email String @unique
+
+  /// Null for accounts that only ever signed in through a provider.
+  passwordHash String?
+
+  name          String?
+  avatarUrl     String?
+  emailVerified Boolean @default(false)
+
+  identities AuthIdentity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("users")
+}
+
+/// One row per external account linked to a user, so further providers can be
+/// added without another migration.
+model AuthIdentity {
+  id String @id @default(uuid())
+
+  userId            String
+  provider          AuthProvider
+  providerAccountId String
+
+  /// Email as reported by the provider, which may drift from `user.email`.
+  email String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("auth_identities")
 }
