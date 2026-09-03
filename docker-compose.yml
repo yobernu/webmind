@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: webmind-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: webmind
+      POSTGRES_PASSWORD: webmind
+      POSTGRES_DB: webmind
+    ports:
+      # 5432 on this machine is already taken by another project's database,
+      # so WebMind uses 5433. Keep DATABASE_URL in services/api/.env in sync.
+      - "5433:5432"
+    volumes:
+      - webmind-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webmind -d webmind"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  webmind-pgdata:

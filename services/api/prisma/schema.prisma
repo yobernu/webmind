@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+
+  // The API is an ESM package compiled with moduleResolution "nodenext", so the
+  // generated client must emit ESM with explicit `.js` import specifiers.
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+// Prisma 7 takes the connection URL from `prisma.config.ts` for Migrate, and
+// from the driver adapter passed to the PrismaClient constructor at runtime.
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
