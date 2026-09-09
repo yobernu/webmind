@@ -18,6 +18,12 @@ enum AuthProvider {
   GOOGLE
 }
 
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
 model User {
   id String @id @default(uuid())
 
@@ -30,7 +36,18 @@ model User {
   avatarUrl     String?
   emailVerified Boolean @default(false)
 
-  identities AuthIdentity[]
+  /// Chosen answer provider ("gemini" | "openrouter") and model. Null means
+  /// the server default. Stored per user rather than per device so the choice
+  /// follows the account.
+  aiProvider String?
+  aiModel    String?
+
+  identities    AuthIdentity[]
+  pages         Page[]
+  conversations Conversation[]
+  notes         Note[]
+  highlights    Highlight[]
+  embeddings    Embedding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -58,4 +75,143 @@ model AuthIdentity {
   @@unique([provider, providerAccountId])
   @@index([userId])
   @@map("auth_identities")
+}
+
+/// A web page as seen by one user. Pages are per-user because everything hung
+/// off them (notes, highlights, conversations) is private to that user.
+model Page {
+  id     String @id @default(uuid())
+  userId String
+
+  /// The URL exactly as visited, kept for display and debugging.
+  url String
+
+  /// Normalised identity of the page: tracking parameters and fragments
+  /// removed, `rel="canonical"` honoured. Two visits that normalise the same
+  /// are the same page.
+  canonicalUrl String
+
+  domain String
+  title  String?
+
+  /// sha256 of the extracted text, so unchanged content is never re-uploaded.
+  contentHash String?
+  content     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  notes         Note[]
+  highlights    Highlight[]
+
+  // No separate index on userId: this unique index already leads with it.
+  @@unique([userId, canonicalUrl])
+  @@index([domain])
+  @@map("pages")
+}
+
+model Conversation {
+  id     String @id @default(uuid())
+  userId String
+  pageId String
+
+  title String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  page     Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId])
+  @@index([pageId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String @id @default(uuid())
+  conversationId String
+
+  role    MessageRole
+  content String
+
+  createdAt DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model Note {
+  id     String @id @default(uuid())
+  userId String
+  pageId String
+
+  content String
+
+  /// The passage the note was written against, when it came from a selection.
+  sourceText String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  page Page @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([pageId])
+  @@map("notes")
+}
+
+/// A chunk of source text plus its embedding, used to select only the relevant
+/// part of a large page for the AI prompt. `sourceType` keeps the table open to
+/// notes and highlights later without restructuring.
+///
+/// `embedding` is `Unsupported`, so every read and write of it goes through raw
+/// SQL in EmbeddingsRepository. The dimensionality is fixed by the column type:
+/// changing GEMINI_EMBEDDING_DIMENSIONS requires a migration and a re-embed.
+model Embedding {
+  id     String @id @default(uuid())
+  userId String
+
+  sourceType String
+  sourceId   String
+  chunkIndex Int
+
+  /// The chunk itself, so a similarity hit can be placed into the prompt.
+  content String
+
+  embedding Unsupported("vector(768)")
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceType, sourceId, chunkIndex])
+  @@index([userId])
+  @@map("embeddings")
+}
+
+model Highlight {
+  id     String @id @default(uuid())
+  userId String
+  pageId String
+
+  selectedText String
+
+  /// Anchoring information used to re-find the passage in the live DOM.
+  selector Json?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  page Page @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([pageId])
+  @@map("highlights")
 }

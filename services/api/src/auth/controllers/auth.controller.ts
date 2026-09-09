@@ -1,16 +1,15 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 
+import {
+  CurrentUser,
+  type AuthenticatedUser,
+} from '../decorators/current-user.decorator.js';
 import { AuthService } from '../services/auth.service.js';
 import { GoogleAuthService } from '../services/google-auth.service.js';
 import { RegisterDto } from '../dto/register.dto.js';
 import { LoginDto } from '../dto/login.dto.js';
 import { GoogleAuthDto } from '../dto/google-auth.dto.js';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard.js';
-
-/** What JwtStrategy.validate() puts on the request. */
-interface AuthenticatedRequest {
-  user: { id: string; email: string };
-}
 
 @Controller('auth')
 export class AuthController {
@@ -50,7 +49,7 @@ export class AuthController {
    */
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  me(@Req() req: AuthenticatedRequest) {
-    return this.authService.validateUser(req.user.id);
+  me(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.validateUser(user.id);
   }
 }

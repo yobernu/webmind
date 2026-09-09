@@ -37,6 +37,8 @@ import { UsersModule } from '../users/users.module.js';
 
   providers: [AuthService, GoogleAuthService, JwtStrategy],
 
-  exports: [AuthService],
+  // PassportModule is re-exported so that any module guarding routes with
+  // JwtAuthGuard can resolve AuthModuleOptions by importing AuthModule alone.
+  exports: [AuthService, PassportModule],
 })
 export class AuthModule {}

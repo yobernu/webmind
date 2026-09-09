@@ -98,4 +98,16 @@ export class UsersService {
 
     return user;
   }
+
+  /** Stores the answer-provider preference. Null model means "provider default". */
+  async setAiPreference(
+    userId: string,
+    aiProvider: string,
+    aiModel: string | null,
+  ) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { aiProvider, aiModel },
+    });
+  }
 }
