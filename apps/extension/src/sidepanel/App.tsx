@@ -7,8 +7,10 @@ import Chat from "./components/Chat";
 import Highlights from "./components/Highlights";
 import History from "./components/History";
 import Notes from "./components/Notes";
+import PageBar from "./components/PageBar";
 import "./sidepanel.css";
 import { useBoot } from "./useBoot";
+import { usePageContext } from "./usePageContext";
 import { useSession } from "./useSession";
 
 const TABS: { id: WorkspaceTab; label: string }[] = [
@@ -21,14 +23,21 @@ const TABS: { id: WorkspaceTab; label: string }[] = [
 export default function App() {
   const session = useSession();
   const { phase, status, page } = useBoot(session.status !== "restoring");
+  const pageContext = usePageContext();
   const [tab, setTab] = useState<WorkspaceTab>("chat");
 
   const signedIn = session.status === "signed-in";
 
+  // The background worker's snapshot wins once it arrives; useBoot's is only
+  // there to fill the header on the very first paint.
+  const snapshot = pageContext.snapshot ?? page;
+
   const panels: Record<WorkspaceTab, ReactNode> = {
-    chat: <Chat page={page} />,
-    notes: <Notes page={page} />,
-    highlights: <Highlights page={page} />,
+    // Keyed by page so switching pages remounts the chat with fresh state,
+    // rather than the hook having to reset itself.
+    chat: <Chat key={pageContext.page?.id ?? "no-page"} context={pageContext} />,
+    notes: <Notes page={snapshot} context={pageContext} />,
+    highlights: <Highlights page={snapshot} context={pageContext} />,
     history: <History />,
   };
 
@@ -40,9 +49,11 @@ export default function App() {
         <header className="panel-header">
           <img src="/favicon.svg" alt="" />
           <div className="panel-header-text">
-            <strong>WebMind</strong>
-            <span title={page?.url}>
-              {page ? prettyUrl(page.url) : "No page context"}
+            <strong>{snapshot?.domain ?? "WebMind"}</strong>
+            <span title={snapshot?.url}>
+              {snapshot
+                ? snapshot.title || prettyUrl(snapshot.url)
+                : "No page context"}
             </span>
           </div>
         </header>
@@ -57,6 +68,8 @@ export default function App() {
                 Sign out
               </button>
             </div>
+
+            <PageBar context={pageContext} />
 
             <nav className="panel-tabs" role="tablist" aria-label="Workspace">
               {TABS.map(({ id, label }) => (

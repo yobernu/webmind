@@ -75,6 +75,91 @@ function describeError(status: number, payload: ErrorPayload | null): ApiError {
   );
 }
 
+/**
+ * Streams a server-sent-events endpoint, yielding each parsed `data:` payload.
+ *
+ * `EventSource` cannot carry an Authorization header, so this is fetch plus a
+ * ReadableStream reader. Failures before the first byte behave exactly like
+ * `apiFetch` (an `ApiError` with the server's message); once the stream is
+ * open, the server reports problems as in-band events instead.
+ */
+export async function* apiStream<T>(
+  path: string,
+  options: RequestOptions = {},
+): AsyncGenerator<T> {
+  const { method = "POST", body, auth = true, signal } = options;
+
+  const headers: Record<string, string> = { Accept: "text/event-stream" };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (auth) Object.assign(headers, await authHeader());
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
+    });
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
+    throw new ApiError(0, `Cannot reach the WebMind API at ${API_BASE_URL}`);
+  }
+
+  if (!response.ok) {
+    if (response.status === 401 && auth) {
+      await removeStored(STORAGE_KEYS.session);
+    }
+
+    const payload = (await response.json().catch(() => null)) as ErrorPayload | null;
+    throw describeError(response.status, payload);
+  }
+
+  if (!response.body) {
+    throw new ApiError(0, "The server returned no stream");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Events are separated by a blank line; a chunk boundary can fall
+      // anywhere, so only complete events are consumed.
+      let separator = buffer.indexOf("\n\n");
+      while (separator !== -1) {
+        const rawEvent = buffer.slice(0, separator);
+        buffer = buffer.slice(separator + 2);
+
+        const data = rawEvent
+          .split("\n")
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trim())
+          .join("");
+
+        if (data) {
+          try {
+            yield JSON.parse(data) as T;
+          } catch {
+            // A malformed event should not kill an otherwise good answer.
+          }
+        }
+
+        separator = buffer.indexOf("\n\n");
+      }
+    }
+  } finally {
+    // Releasing matters when the consumer breaks out early, e.g. on unmount.
+    reader.cancel().catch(() => {});
+  }
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestOptions = {},

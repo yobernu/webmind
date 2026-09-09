@@ -75,7 +75,7 @@ export function useBoot(sessionReady: boolean): BootState {
       ? 'Reading the current page'
       : 'Running in dev preview'
     : page
-      ? `Ready on ${page.hostname}`
+      ? `Ready on ${page.domain}`
       : 'Ready'
 
   return { phase, status, page }

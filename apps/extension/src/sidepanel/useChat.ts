@@ -1,0 +1,273 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  createConversation,
+  fetchAiStatus,
+  listConversations,
+  listMessages,
+  sendMessage,
+  setAiPreference,
+} from "../api/conversations";
+import { ApiError } from "../api/client";
+import type {
+  AiProviderId,
+  AiStatus,
+  ChatMessage,
+  Conversation,
+} from "../types";
+
+export interface ChatState {
+  status: AiStatus | null;
+  conversations: Conversation[];
+  conversationId: string | null;
+  messages: ChatMessage[];
+  /** Answer text arriving right now; empty when nothing is in flight. */
+  streaming: string;
+  pending: boolean;
+  error: string | null;
+  /** The question that failed, so it can be resent without retyping. */
+  failedQuestion: string | null;
+  ask: (question: string) => Promise<void>;
+  /** Persists which provider/model answers this user's questions. */
+  chooseProvider: (provider: AiProviderId, model?: string) => Promise<void>;
+  startNewConversation: () => Promise<void>;
+  openConversation: (conversationId: string) => Promise<void>;
+  dismissError: () => void;
+}
+
+/** Optimistic rows get a temporary id; the server's arrives with `done`. */
+const LOCAL_ID_PREFIX = "local-";
+
+/**
+ * Chat for one page. Resets whenever the resolved page changes, so a thread is
+ * never shown against the wrong page.
+ */
+export function useChat(pageId: string | null): ChatState {
+  const [status, setStatus] = useState<AiStatus | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [streaming, setStreaming] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [failedQuestion, setFailedQuestion] = useState<string | null>(null);
+
+  // Lets an in-flight answer be abandoned when the page changes or the panel
+  // unmounts, which also stops the server generating.
+  const inFlight = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetchAiStatus(controller.signal)
+      .then(setStatus)
+      .catch(() => setStatus(null));
+
+    return () => controller.abort();
+  }, []);
+
+  // Loads what was already asked on this page. No state reset is needed here:
+  // App keys this component by page id, so a different page arrives as a fresh
+  // mount.
+  useEffect(() => {
+    if (!pageId) return;
+
+    const controller = new AbortController();
+
+    const restore = async () => {
+      try {
+        const existing = await listConversations(pageId, controller.signal);
+        if (controller.signal.aborted) return;
+
+        setConversations(existing);
+
+        // Reopen the most recent thread, so returning to a page shows what was
+        // already asked there (PRD §9.6).
+        const latest = existing[0];
+        if (!latest) return;
+
+        setConversationId(latest.id);
+        const history = await listMessages(latest.id, controller.signal);
+        if (!controller.signal.aborted) setMessages(history);
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        if (cause instanceof ApiError && cause.isBadCredentials) return;
+        setError(
+          cause instanceof ApiError ? cause.message : "Could not load this chat",
+        );
+      }
+    };
+
+    void restore();
+
+    return () => controller.abort();
+  }, [pageId]);
+
+  useEffect(() => () => inFlight.current?.abort(), []);
+
+  const ask = useCallback(
+    async (question: string) => {
+      const trimmed = question.trim();
+      if (!trimmed || !pageId || pending) return;
+
+      setPending(true);
+      setError(null);
+      setFailedQuestion(null);
+      setStreaming("");
+
+      const controller = new AbortController();
+      inFlight.current = controller;
+
+      // Show the question immediately; the server has already stored it by the
+      // time the first delta arrives.
+      const optimistic: ChatMessage = {
+        id: `${LOCAL_ID_PREFIX}${Date.now()}`,
+        conversationId: conversationId ?? "",
+        role: "USER",
+        content: trimmed,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((current) => [...current, optimistic]);
+
+      // Set once the server has finished with this exchange, so the thread can
+      // be reconciled against what was actually stored. Optimistic rows and
+      // retries otherwise drift from storage — a retry would show the question
+      // twice locally while the server holds its own record.
+      let settled: string | null = null;
+
+      try {
+        let targetId = conversationId;
+
+        if (!targetId) {
+          const created = await createConversation(pageId, trimmed);
+          targetId = created.id;
+          setConversationId(created.id);
+          setConversations((current) => [created, ...current]);
+        }
+
+        let answer = "";
+
+        for await (const event of sendMessage(
+          targetId,
+          trimmed,
+          controller.signal,
+        )) {
+          if (event.type === "delta") {
+            answer += event.text;
+            setStreaming(answer);
+            continue;
+          }
+
+          if (event.type === "done") {
+            setMessages((current) => [
+              ...current,
+              {
+                id: event.messageId,
+                conversationId: targetId!,
+                role: "ASSISTANT",
+                content: event.content,
+                createdAt: new Date().toISOString(),
+              },
+            ]);
+            setStreaming("");
+            settled = targetId;
+            continue;
+          }
+
+          // The server persisted the question and any partial answer, so the
+          // question is offered back rather than lost (FR-10).
+          setError(event.message);
+          setFailedQuestion(trimmed);
+          setStreaming("");
+          settled = targetId;
+        }
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === "AbortError") return;
+
+        setError(
+          cause instanceof ApiError
+            ? cause.message
+            : "The question could not be sent",
+        );
+        setFailedQuestion(trimmed);
+        setStreaming("");
+      } finally {
+        if (inFlight.current === controller) inFlight.current = null;
+        setPending(false);
+
+        // Replace the optimistic view with the stored thread, so what is shown
+        // is what would be seen on reopening the panel.
+        if (settled && !controller.signal.aborted) {
+          try {
+            const stored = await listMessages(settled, controller.signal);
+            if (!controller.signal.aborted) setMessages(stored);
+          } catch {
+            // Keep the optimistic view; it is close enough to carry on with.
+          }
+        }
+      }
+    },
+    [conversationId, pageId, pending],
+  );
+
+  const startNewConversation = useCallback(async () => {
+    if (!pageId) return;
+
+    inFlight.current?.abort();
+    setConversationId(null);
+    setMessages([]);
+    setStreaming("");
+    setError(null);
+    setFailedQuestion(null);
+  }, [pageId]);
+
+  const openConversation = useCallback(
+    async (id: string) => {
+      inFlight.current?.abort();
+      setConversationId(id);
+      setMessages([]);
+      setStreaming("");
+      setError(null);
+
+      try {
+        setMessages(await listMessages(id));
+      } catch (cause) {
+        setError(
+          cause instanceof ApiError
+            ? cause.message
+            : "Could not open that conversation",
+        );
+      }
+    },
+    [],
+  );
+
+  /** Persists the provider/model choice and adopts the server's new view. */
+  const chooseProvider = useCallback(
+    async (provider: AiProviderId, model?: string) => {
+      const next = await setAiPreference(provider, model);
+      setStatus(next);
+    },
+    [],
+  );
+
+  const dismissError = useCallback(() => {
+    setError(null);
+    setFailedQuestion(null);
+  }, []);
+
+  return {
+    status,
+    conversations,
+    conversationId,
+    messages,
+    streaming,
+    pending,
+    error,
+    failedQuestion,
+    ask,
+    chooseProvider,
+    startNewConversation,
+    openConversation,
+    dismissError,
+  };
+}
