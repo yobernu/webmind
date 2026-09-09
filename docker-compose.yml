@@ -1,6 +1,9 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector's image, not plain postgres: the AI context pipeline stores
+    # embeddings in a `vector` column. Same PG 16 major, so the existing
+    # webmind-pgdata volume is reused as-is.
+    image: pgvector/pgvector:pg16
     container_name: webmind-postgres
     restart: unless-stopped
     environment:
