@@ -42,12 +42,17 @@ model User {
   aiProvider String?
   aiModel    String?
 
+  /// Whether this user may use their own provider keys. The entitlement half
+  /// of the BYOK chain; a stored credential is ignored while this is false.
+  byokEnabled Boolean @default(true)
+
   identities    AuthIdentity[]
   pages         Page[]
   conversations Conversation[]
   notes         Note[]
   highlights    Highlight[]
   embeddings    Embedding[]
+  credentials   ProviderCredential[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -214,4 +219,39 @@ model Highlight {
   @@index([userId])
   @@index([pageId])
   @@map("highlights")
+}
+
+/// A provider API key belonging to one user.
+///
+/// The key is stored only as AES-256-GCM ciphertext, and the sealed form is
+/// bound to (userId, provider, keyVersion) as additional authenticated data:
+/// a row copied into another user cannot be decrypted, so database write access
+/// does not become a way to spend someone else's quota.
+model ProviderCredential {
+  id     String @id @default(uuid())
+  userId String
+
+  /// Matches AI_PROVIDER_IDS: "gemini" | "openrouter".
+  provider String
+
+  ciphertext String
+  iv         String
+  authTag    String
+
+  /// Lets a future master-key rotation re-wrap rows without a schema change.
+  keyVersion Int @default(1)
+
+  /// Masked tail of the key, so the UI can show which one is stored.
+  hint String
+
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("provider_credentials")
 }

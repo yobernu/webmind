@@ -1,7 +1,9 @@
 import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MAX_CONTEXT_CHARS } from '../../ai/constants/prompt.constants.js';
 import type { AiService } from '../../ai/services/ai.service.js';
+import { NoAnswerError } from '../../ai/utils/answer-stream.js';
 import type { ConversationsRepository } from '../../conversations/repositories/conversations.repository.js';
 import type { ConversationsService } from '../../conversations/services/conversations.service.js';
 import { MessageRole } from '../../generated/prisma/enums.js';
@@ -37,6 +39,15 @@ function createDeps(
     configured?: boolean;
     owned?: boolean;
     title?: string | null;
+    strategy?: string;
+    /** Page body long enough that retrieval will be attempted. */
+    longPage?: boolean;
+    /** Overrides the history replayed into the prompt. */
+    recent?: { role: MessageRole; content: string }[];
+    /** Simulates the client disconnecting after this many deltas. */
+    stopAfter?: number;
+    /** Aborted by `stopAfter`, so the service sees a real stopped signal. */
+    controller?: AbortController;
   } = {},
 ) {
   const written: { role: MessageRole; content: string }[] = [];
@@ -54,7 +65,15 @@ function createDeps(
       };
     }),
     listForConversation: vi.fn(async () => []),
-    listRecent: vi.fn(async () => [
+    listRecent: vi.fn(async () =>
+      options.recent
+        ? options.recent.map((row, index) => ({
+            id: `hist-${index}`,
+            conversationId: 'conv-1',
+            createdAt: new Date(Date.now() + index),
+            ...row,
+          }))
+        : [
       {
         id: 'old-1',
         conversationId: 'conv-1',
@@ -69,7 +88,8 @@ function createDeps(
         content: 'a system note that must not be replayed',
         createdAt: new Date(),
       },
-    ]),
+    ],
+    ),
   };
 
   const conversations = {
@@ -81,19 +101,38 @@ function createDeps(
 
   const conversationRows = { touch: vi.fn(async () => conversation) };
 
-  const pages = { findOwnedWithContent: vi.fn(async () => page) };
+  const pages = {
+    findOwnedWithContent: vi.fn(async () =>
+      options.longPage
+        ? { ...page, content: 'x'.repeat(MAX_CONTEXT_CHARS + 1) }
+        : page,
+    ),
+  };
 
   const ai = {
     isConfigured: options.configured ?? true,
-    streamAnswer: vi.fn(async function* (
-      _request: { history: { role: string; content: string }[] },
-      _signal?: AbortSignal,
-    ) {
+    prepare: vi.fn(
+      async (_request: { history: { role: string; content: string }[] }) => ({
+        provider: { id: 'gemini' },
+        model: 'gemini-test',
+        prompt: { systemInstruction: 'SYSTEM', messages: [], maxOutputTokens: 1, temperature: 0 },
+        strategy: options.strategy ?? 'whole',
+      }),
+    ),
+    stream: vi.fn(function* (_prepared: unknown, _signal?: AbortSignal) {
       const deltas = options.deltas ?? ['Ruritania ', 'exports timber.'];
       for (const [index, delta] of deltas.entries()) {
         if (options.throwAfter !== undefined && index === options.throwAfter) {
           throw new Error('provider timeout');
         }
+
+        if (options.stopAfter !== undefined && index === options.stopAfter) {
+          // What a client disconnect looks like from inside the stream: the
+          // signal trips, then the provider call rejects.
+          options.controller?.abort();
+          throw new Error('This operation was aborted');
+        }
+
         yield delta;
       }
     }),
@@ -127,6 +166,8 @@ describe('MessagesService.ask', () => {
     const events = await drain(deps.service.ask('user-1', 'conv-1', 'What is exported?'));
 
     expect(events).toEqual([
+      { type: 'status', stage: 'reading' },
+      { type: 'status', stage: 'thinking' },
       { type: 'delta', text: 'Ruritania ' },
       { type: 'delta', text: 'exports timber.' },
       { type: 'done', messageId: 'msg-2', content: 'Ruritania exports timber.' },
@@ -198,6 +239,59 @@ describe('MessagesService.ask', () => {
       });
       expect(empty.written).toHaveLength(1);
     });
+
+    it('tells the user what to change when the model never reached an answer', async () => {
+      // A NoAnswerError is the one provider failure worth repeating verbatim:
+      // it says what would make the next attempt work.
+      const abandoned = createDeps();
+      abandoned.ai.stream = vi.fn(function* () {
+        throw new NoAnswerError('That model never reached an answer.');
+      });
+
+      const events = await drain(abandoned.service.ask('user-1', 'conv-1', 'q'));
+
+      expect(events.at(-1)).toEqual({
+        type: 'error',
+        message: 'That model never reached an answer. Your question was saved.',
+      });
+    });
+  });
+
+  // Pressing Stop is a normal ending, not an error: the person asking chose it.
+  describe('when the caller stops the answer', () => {
+    it('keeps the text generated so far and reports nothing', async () => {
+      const controller = new AbortController();
+      const stopped = createDeps({
+        deltas: ['Ruritania ', 'exports timber.'],
+        stopAfter: 1,
+        controller,
+      });
+
+      const events = await drain(
+        stopped.service.ask('user-1', 'conv-1', 'q', controller.signal),
+      );
+
+      expect(stopped.written[1]).toEqual({
+        role: MessageRole.ASSISTANT,
+        content: 'Ruritania ',
+      });
+      // No error and no done: the client is gone, and a stop is not a failure.
+      expect(events.some((event) => event.type === 'error')).toBe(false);
+      expect(events.some((event) => event.type === 'done')).toBe(false);
+    });
+
+    it('does not report a stop before any text as an empty answer', async () => {
+      const controller = new AbortController();
+      const stopped = createDeps({ stopAfter: 0, controller });
+
+      const events = await drain(
+        stopped.service.ask('user-1', 'conv-1', 'q', controller.signal),
+      );
+
+      // Only the question; nothing was generated to keep.
+      expect(stopped.written).toHaveLength(1);
+      expect(events.some((event) => event.type === 'error')).toBe(false);
+    });
   });
 
   describe('preconditions', () => {
@@ -224,11 +318,65 @@ describe('MessagesService.ask', () => {
     });
   });
 
+  // The panel shows these as "Reading the page" / "Searching the page" /
+  // "Thinking". Each must correspond to work that is actually happening.
+  describe('progress stages', () => {
+    it('reports reading, then thinking, before any text', async () => {
+      const events = await drain(deps.service.ask('user-1', 'conv-1', 'q'));
+
+      const stages = events
+        .filter((event) => event.type === 'status')
+        .map((event) => (event as { stage: string }).stage);
+
+      expect(stages).toEqual(['reading', 'thinking']);
+
+      const firstDelta = events.findIndex((event) => event.type === 'delta');
+      const lastStatus = events.reduce(
+        (last, event, index) => (event.type === 'status' ? index : last),
+        -1,
+      );
+      expect(lastStatus).toBeLessThan(firstDelta);
+    });
+
+    it('says searching only when the page is large enough to be retrieved from', async () => {
+      // Claiming a search on a short page would be describing work that never
+      // happens: the assembler passes small pages through whole.
+      const long = createDeps({ longPage: true, strategy: 'retrieved' });
+
+      const events = await drain(long.service.ask('user-1', 'conv-1', 'q'));
+      const stages = events
+        .filter((event) => event.type === 'status')
+        .map((event) => (event as { stage: string }).stage);
+
+      expect(stages).toEqual(['searching', 'thinking']);
+    });
+
+    it('emits no status once text has started arriving', async () => {
+      const events = await drain(deps.service.ask('user-1', 'conv-1', 'q'));
+      const firstDelta = events.findIndex((event) => event.type === 'delta');
+
+      expect(
+        events.slice(firstDelta).some((event) => event.type === 'status'),
+      ).toBe(false);
+    });
+
+    it('still reports the phases when the provider then fails', async () => {
+      // The stages are not conditional on success; a failure after "thinking"
+      // must not leave the panel with no explanation of what it was doing.
+      const failing = createDeps({ throwAfter: 0 });
+
+      const events = await drain(failing.service.ask('user-1', 'conv-1', 'q'));
+
+      expect(events[0]).toEqual({ type: 'status', stage: 'reading' });
+      expect(events.at(-1)?.type).toBe('error');
+    });
+  });
+
   describe('context passed to the model', () => {
     it('sends the page identity and stored text', async () => {
       await drain(deps.service.ask('user-1', 'conv-1', 'What is exported?'));
 
-      expect(deps.ai.streamAnswer).toHaveBeenCalledWith(
+      expect(deps.ai.prepare).toHaveBeenCalledWith(
         expect.objectContaining({
           userId: 'user-1',
           pageId: 'page-1',
@@ -239,14 +387,13 @@ describe('MessagesService.ask', () => {
             content: page.content,
           },
         }),
-        undefined,
       );
     });
 
     it('replays prior user and assistant turns but never system rows', async () => {
       await drain(deps.service.ask('user-1', 'conv-1', 'q'));
 
-      const [request] = deps.ai.streamAnswer.mock.calls[0];
+      const [request] = deps.ai.prepare.mock.calls[0];
       expect(request.history).toEqual([
         { role: 'user', content: 'earlier question' },
       ]);
@@ -255,12 +402,48 @@ describe('MessagesService.ask', () => {
     it('reads history from before the new question was stored', async () => {
       await drain(deps.service.ask('user-1', 'conv-1', 'the new question'));
 
-      const [request] = deps.ai.streamAnswer.mock.calls[0];
+      const [request] = deps.ai.prepare.mock.calls[0];
       expect(
         request.history.some((turn: { content: string }) =>
           turn.content.includes('the new question'),
         ),
       ).toBe(false);
+    });
+
+    it('collapses a question repeated after failed attempts', async () => {
+      // Every retry is persisted so the question is never lost (FR-10), so an
+      // unanswered question can appear several times in a row. Replaying all
+      // of them invites the model to analyse the repetition instead of
+      // answering it.
+      const repeated = createDeps({
+        recent: [
+          { role: MessageRole.USER, content: 'why am I seeing these errors' },
+          { role: MessageRole.USER, content: 'why am I seeing these errors' },
+          { role: MessageRole.USER, content: 'why am I seeing these errors' },
+        ],
+      });
+
+      await drain(repeated.service.ask('user-1', 'conv-1', 'and now?'));
+
+      const [request] = repeated.ai.prepare.mock.calls[0];
+      expect(request.history).toEqual([
+        { role: 'user', content: 'why am I seeing these errors' },
+      ]);
+    });
+
+    it('keeps a repeat that follows an answer, which is a real follow-up', async () => {
+      const followUp = createDeps({
+        recent: [
+          { role: MessageRole.USER, content: 'summarise this' },
+          { role: MessageRole.ASSISTANT, content: 'Here is a summary.' },
+          { role: MessageRole.USER, content: 'summarise this' },
+        ],
+      });
+
+      await drain(followUp.service.ask('user-1', 'conv-1', 'and now?'));
+
+      const [request] = followUp.ai.prepare.mock.calls[0];
+      expect(request.history).toHaveLength(3);
     });
   });
 

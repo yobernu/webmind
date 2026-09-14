@@ -1,9 +1,13 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 
-import { MAX_HISTORY_MESSAGES } from '../../ai/constants/prompt.constants.js';
+import {
+  MAX_CONTEXT_CHARS,
+  MAX_HISTORY_MESSAGES,
+} from '../../ai/constants/prompt.constants.js';
 import type { AiStreamEvent } from '../../ai/dto/ai-completion.dto.js';
 import type { AiMessage } from '../../ai/interfaces/ai-message.interface.js';
 import { AiService } from '../../ai/services/ai.service.js';
+import { NoAnswerError } from '../../ai/utils/answer-stream.js';
 import {
   ConversationsService,
   titleFromQuestion,
@@ -82,32 +86,54 @@ export class MessagesService {
     );
 
     let answer = '';
-    let failure: string | null = null;
+    // `log` is for us and may contain provider internals; `userMessage` is set
+    // only when there is something actionable to say to the person who asked.
+    let failure: { log: string; userMessage?: string } | null = null;
 
     try {
-      for await (const delta of this.ai.streamAnswer(
-        {
-          userId,
-          pageId: conversation.pageId,
-          question,
-          history,
-          page: {
-            url: page.url,
-            title: page.title,
-            content: page.content,
-          },
+      // Context assembly first. Whether it will retrieve is decided by the same
+      // size threshold the assembler uses, so the stage can be named *before*
+      // the work rather than reported after it is already done.
+      const willSearch = (page.content?.length ?? 0) > MAX_CONTEXT_CHARS;
+      yield { type: 'status', stage: willSearch ? 'searching' : 'reading' };
+
+      const prepared = await this.ai.prepare({
+        userId,
+        pageId: conversation.pageId,
+        question,
+        history,
+        page: {
+          url: page.url,
+          title: page.title,
+          content: page.content,
         },
-        signal,
-      )) {
+      });
+
+      // From here the wait is the provider's, which can be most of it.
+      yield { type: 'status', stage: 'thinking' };
+
+      for await (const delta of this.ai.stream(prepared, signal)) {
         answer += delta;
         yield { type: 'delta', text: delta };
       }
     } catch (error) {
-      failure =
-        error instanceof Error ? error.message : 'The AI request failed';
-      this.logger.warn(
-        `Answer stream failed for conversation ${conversationId}: ${failure}`,
-      );
+      // Stopping is not failing. The abort came from whoever asked, and
+      // whatever was generated is persisted below either way, so this is not
+      // worth a warning or an error event.
+      if (signal?.aborted) {
+        this.logger.debug(
+          `Answer stopped by the client for conversation ${conversationId}`,
+        );
+      } else {
+        failure = {
+          log: error instanceof Error ? error.message : 'The AI request failed',
+          userMessage:
+            error instanceof NoAnswerError ? error.userMessage : undefined,
+        };
+        this.logger.warn(
+          `Answer stream failed for conversation ${conversationId}: ${failure.log}`,
+        );
+      }
     }
 
     // Persisted whether the stream completed, failed part-way, or the client
@@ -122,10 +148,20 @@ export class MessagesService {
 
     if (stored) await this.conversationRows.touch(conversationId);
 
+    // Nothing to report to a caller who asked us to stop. Reaching this with
+    // no text is the normal case when Stop is pressed before the answer
+    // begins, and "the model returned an empty answer" would be a lie.
+    if (signal?.aborted) return;
+
     if (failure) {
       yield {
         type: 'error',
-        message: 'The answer could not be completed. Your question was saved.',
+        // Provider errors stay generic: they can carry internals, and there is
+        // nothing the person who asked could do with them. A NoAnswerError is
+        // the opposite — it exists to tell them what to change.
+        message: failure.userMessage
+          ? `${failure.userMessage} Your question was saved.`
+          : 'The answer could not be completed. Your question was saved.',
       };
       return;
     }
@@ -141,16 +177,37 @@ export class MessagesService {
     yield { type: 'done', messageId: stored.id, content: answer };
   }
 
-  /** Recent turns as provider-neutral messages, oldest first. */
+  /**
+   * Recent turns as provider-neutral messages, oldest first.
+   *
+   * Consecutive identical questions are collapsed. They accumulate when a
+   * question is retried after a failure — each attempt is persisted so it is
+   * never lost — and replaying four copies invites the model to reason about
+   * the repetition instead of answering.
+   */
   private async historyFor(conversationId: string): Promise<AiMessage[]> {
     const rows = await this.messages.listRecent(
       conversationId,
       MAX_HISTORY_MESSAGES,
     );
 
-    return rows.flatMap((row) => {
+    const history: AiMessage[] = [];
+
+    for (const row of rows) {
       const role = toAiRole(row.role);
-      return role ? [{ role, content: row.content }] : [];
-    });
+      if (!role) continue;
+
+      const previous = history.at(-1);
+      const isRepeat =
+        previous?.role === role &&
+        role === 'user' &&
+        previous.content === row.content;
+
+      if (isRepeat) continue;
+
+      history.push({ role, content: row.content });
+    }
+
+    return history;
   }
 }

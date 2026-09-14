@@ -83,6 +83,12 @@ export default function ModelPicker({
         </label>
       )}
 
+      <p className="model-picker-note" data-kind={selected.usingUserKey ? "own" : undefined}>
+        {selected.usingUserKey
+          ? "Billed to your own API key."
+          : "Billed to this server key."}
+      </p>
+
       {usable.length === 1 && (
         <p className="model-picker-note">
           Only {usable[0].label} is configured on this server.

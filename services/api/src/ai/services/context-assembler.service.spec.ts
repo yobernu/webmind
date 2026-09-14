@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_CONTEXT_CHARS } from '../constants/prompt.constants.js';
 import type { EmbeddingProvider } from '../providers/ai-provider.interface.js';
 import type { EmbeddingsRepository } from '../repositories/embeddings.repository.js';
+import type { CredentialsService } from './credentials.service.js';
 import { ContextAssemblerService } from './context-assembler.service.js';
 
 /** Longer than the budget, so the assembler must select rather than pass through. */
@@ -10,11 +11,21 @@ const longContent = 'x'.repeat(MAX_CONTEXT_CHARS + 5_000);
 
 function createDeps(options: { configured?: boolean; hits?: unknown[]; indexed?: number } = {}) {
   const provider = {
-    isConfigured: options.configured ?? true,
+    hasServerKey: options.configured ?? true,
     model: 'test-model',
     embeddingDimensions: 768,
     streamAnswer: vi.fn(),
     embed: vi.fn(async () => [[0.1, 0.2, 0.3]]),
+  };
+
+  // 'configured' now means "a Gemini key is resolvable for this user", which
+  // is the credentials service's job rather than the provider's.
+  const credentials = {
+    tryResolveCredential: vi.fn(async () =>
+      (options.configured ?? true)
+        ? { apiKey: 'test-key', source: 'server' as const }
+        : null,
+    ),
   };
 
   const embeddings = {
@@ -27,9 +38,11 @@ function createDeps(options: { configured?: boolean; hits?: unknown[]; indexed?:
   return {
     provider,
     embeddings,
+    credentials,
     service: new ContextAssemblerService(
       provider as unknown as EmbeddingProvider,
       embeddings as unknown as EmbeddingsRepository,
+      credentials as unknown as CredentialsService,
     ),
   };
 }
@@ -86,6 +99,7 @@ describe('ContextAssemblerService', () => {
       expect(provider.embed).toHaveBeenCalledWith(
         [input.question],
         'query',
+        'test-key',
       );
     });
 

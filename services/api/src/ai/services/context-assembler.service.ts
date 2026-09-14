@@ -9,6 +9,7 @@ import {
   type EmbeddingProvider,
 } from '../providers/ai-provider.interface.js';
 import { EmbeddingsRepository } from '../repositories/embeddings.repository.js';
+import { CredentialsService } from './credentials.service.js';
 import { PAGE_SOURCE_TYPE } from './embedding.service.js';
 
 export interface AssembleInput {
@@ -39,6 +40,7 @@ export class ContextAssemblerService {
   constructor(
     @Inject(EMBEDDING_PROVIDER) private readonly provider: EmbeddingProvider,
     private readonly embeddings: EmbeddingsRepository,
+    private readonly credentials: CredentialsService,
   ) {}
 
   /**
@@ -81,7 +83,12 @@ export class ContextAssemblerService {
     pageId: string,
     question: string,
   ): Promise<string | null> {
-    if (!this.provider.isConfigured) return null;
+    const credential = await this.credentials.tryResolveCredential(
+      userId,
+      'gemini',
+    );
+
+    if (!credential) return null;
 
     try {
       const indexed = await this.embeddings.countForSource(
@@ -90,7 +97,11 @@ export class ContextAssemblerService {
       );
       if (indexed === 0) return null;
 
-      const [queryEmbedding] = await this.provider.embed([question], 'query');
+      const [queryEmbedding] = await this.provider.embed(
+        [question],
+        'query',
+        credential.apiKey,
+      );
       if (!queryEmbedding) return null;
 
       const hits = await this.embeddings.findSimilar(

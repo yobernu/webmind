@@ -1,13 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { UsersService } from '../../users/services/users.service.js';
+import type { CredentialsService } from './credentials.service.js';
 import type {
   AiAnswerProvider,
+  AnswerChunk,
   EmbeddingProvider,
+  FinishReason,
 } from '../providers/ai-provider.interface.js';
+import { ANSWER_SENTINEL, NoAnswerError } from '../utils/answer-stream.js';
 import { AiService } from './ai.service.js';
 import type { ContextAssemblerService } from './context-assembler.service.js';
 import type { PromptBuilderService } from './prompt-builder.service.js';
+
+/** A provider stream: text fragments, then how the generation ended. */
+async function* textStream(
+  chunks: string[],
+  finish: FinishReason = 'stop',
+): AsyncGenerator<AnswerChunk> {
+  for (const chunk of chunks) yield { type: 'text', text: chunk };
+  yield { type: 'finish', reason: finish };
+}
 
 const request = {
   userId: 'user-1',
@@ -27,6 +40,8 @@ interface Options {
   strategy?: string;
   /** What findById returns, i.e. the stored preference. */
   user?: { aiProvider: string | null; aiModel: string | null } | null;
+  /** Providers this user has stored their own key for. */
+  userKeys?: string[];
 }
 
 function createDeps(options: Options = {}) {
@@ -40,11 +55,10 @@ function createDeps(options: Options = {}) {
     label,
     models,
     defaultModel: models[0],
-    isConfigured,
-    streamAnswer: vi.fn(async function* () {
-      yield 'Timber';
-      yield '.';
-    }),
+    hasServerKey: isConfigured,
+    streamAnswer: vi.fn(() =>
+      textStream([ANSWER_SENTINEL, 'Timber', '.']),
+    ),
   });
 
   const gemini = makeProvider(
@@ -61,7 +75,7 @@ function createDeps(options: Options = {}) {
   );
 
   const embeddingProvider = {
-    isConfigured: options.geminiConfigured ?? true,
+    hasServerKey: options.geminiConfigured ?? true,
     embeddingDimensions: 768,
     embed: vi.fn(),
   };
@@ -92,9 +106,35 @@ function createDeps(options: Options = {}) {
     setAiPreference: vi.fn(async () => undefined),
   };
 
+  const userKeys = new Set(options.userKeys ?? []);
+  const serverKeys = new Set(
+    [
+      (options.geminiConfigured ?? true) && 'gemini',
+      (options.openRouterConfigured ?? true) && 'openrouter',
+    ].filter((id): id is string => Boolean(id)),
+  );
+
+  const credentials = {
+    isAvailable: true,
+    hasUserKey: vi.fn(async (_userId: string, provider: string) =>
+      userKeys.has(provider),
+    ),
+    resolveCredential: vi.fn(async (_userId: string, provider: string) => {
+      if (userKeys.has(provider)) {
+        return { apiKey: `user-${provider}-key`, source: 'user' as const };
+      }
+      if (serverKeys.has(provider)) {
+        return { apiKey: `server-${provider}-key`, source: 'server' as const };
+      }
+      throw new Error(`no key for ${provider}`);
+    }),
+    markUsed: vi.fn(async () => undefined),
+  };
+
   return {
     gemini,
     openRouter,
+    credentials,
     contextAssembler,
     promptBuilder,
     users,
@@ -104,6 +144,7 @@ function createDeps(options: Options = {}) {
       contextAssembler as unknown as ContextAssemblerService,
       promptBuilder as unknown as PromptBuilderService,
       users as unknown as UsersService,
+      credentials as unknown as CredentialsService,
     ),
   };
 }
@@ -191,7 +232,7 @@ describe('AiService.resolveFor', () => {
     });
 
     await expect(service.resolveFor('user-1')).rejects.toThrow(
-      /not configured/i,
+      /no AI provider is available/i,
     );
   });
 });
@@ -214,7 +255,7 @@ describe('AiService.setPreference', () => {
 
     await expect(
       service.setPreference('user-1', 'openrouter'),
-    ).rejects.toThrow(/not configured/i);
+    ).rejects.toThrow(/no key on this server/i);
     expect(users.setAiPreference).not.toHaveBeenCalled();
   });
 
@@ -267,6 +308,7 @@ describe('AiService.streamAnswer', () => {
     expect(openRouter.streamAnswer).toHaveBeenCalledWith(
       expect.anything(),
       'anthropic/claude-x',
+      'server-openrouter-key',
       undefined,
     );
   });
@@ -294,7 +336,151 @@ describe('AiService.streamAnswer', () => {
     expect(gemini.streamAnswer).toHaveBeenCalledWith(
       expect.anything(),
       'gemini-3.8-flash',
+      'server-gemini-key',
       controller.signal,
     );
+  });
+});
+
+describe('AiService with BYOK', () => {
+  it('offers a provider the server has no key for once the user supplies one', async () => {
+    const status = await createDeps({
+      openRouterConfigured: false,
+      userKeys: ['openrouter'],
+    }).service.status('user-1');
+
+    const openRouter = status.providers.find((p) => p.id === 'openrouter')!;
+
+    expect(openRouter.enabled).toBe(true);
+    expect(openRouter.hasServerKey).toBe(false);
+    expect(openRouter.hasUserKey).toBe(true);
+  });
+
+  it("prefers the user own key over the server key", async () => {
+    const { service } = createDeps({ userKeys: ['gemini'] });
+
+    const resolved = await service.resolveFor('user-1');
+
+    expect(resolved.credential.source).toBe('user');
+    expect(resolved.credential.apiKey).toBe('user-gemini-key');
+  });
+
+  it('uses the server key when the user has none', async () => {
+    const { service } = createDeps();
+
+    const resolved = await service.resolveFor('user-1');
+
+    expect(resolved.credential.source).toBe('server');
+    expect(resolved.credential.apiKey).toBe('server-gemini-key');
+  });
+
+  it("hands the user key to the provider, not the server key", async () => {
+    // The whole feature in one assertion: the key that reaches the vendor is
+    // the one the user pasted.
+    const { service, gemini } = createDeps({ userKeys: ['gemini'] });
+
+    for await (const _ of service.streamAnswer(request)) void _;
+
+    expect(gemini.streamAnswer).toHaveBeenCalledWith(
+      expect.anything(),
+      'gemini-3.8-flash',
+      'user-gemini-key',
+      undefined,
+    );
+  });
+
+  it('reports retrieval as available on a user Gemini key alone', async () => {
+    // Embeddings are Gemini-only; a user key is as good as a server one.
+    const status = await createDeps({
+      geminiConfigured: false,
+      userKeys: ['gemini'],
+    }).service.status('user-1');
+
+    expect(status.retrievalAvailable).toBe(true);
+  });
+
+  it("marks the selection as spending the user own quota", async () => {
+    const status = await createDeps({ userKeys: ['gemini'] }).service.status(
+      'user-1',
+    );
+
+    expect(status.selected?.usingUserKey).toBe(true);
+  });
+
+  it('records that a stored key was used', async () => {
+    const { service, credentials } = createDeps({ userKeys: ['gemini'] });
+
+    for await (const _ of service.streamAnswer(request)) void _;
+
+    expect(credentials.markUsed).toHaveBeenCalled();
+  });
+});
+
+describe('AiService output contract', () => {
+  it("withholds model reasoning and emits only the answer", async () => {
+    const { service, gemini } = createDeps();
+
+    gemini.streamAnswer = vi.fn(() =>
+      textStream([
+        "Here's a thinking process:\n1. Analyze the user input.\n",
+        'The user wants a summary.\n',
+        `${ANSWER_SENTINEL}\n`,
+        'Ruritania exports timber.',
+      ]),
+    );
+
+    let text = '';
+    for await (const chunk of service.streamAnswer(request)) text += chunk;
+
+    expect(text).toBe('Ruritania exports timber.');
+    expect(text).not.toContain('thinking process');
+    expect(text).not.toContain(ANSWER_SENTINEL);
+  });
+
+  it('passes a model that emits no marker through unchanged', async () => {
+    // Never swallow an answer just because the contract was not followed.
+    const { service, gemini } = createDeps();
+
+    gemini.streamAnswer = vi.fn(() =>
+      textStream(['A plain answer ', 'with no marker.']),
+    );
+
+    let text = '';
+    for await (const chunk of service.streamAnswer(request)) text += chunk;
+
+    expect(text).toBe('A plain answer with no marker.');
+  });
+
+  it('fails rather than showing a preamble that never reached an answer', async () => {
+    // The provider reports the cut-off, so this is not inferred from the text.
+    const { service, gemini } = createDeps();
+
+    gemini.streamAnswer = vi.fn(() =>
+      textStream(
+        ["Here's a thinking process:\n1. Analyze the user input.\n"],
+        'length',
+      ),
+    );
+
+    let text = '';
+    const drain = async () => {
+      for await (const chunk of service.streamAnswer(request)) text += chunk;
+    };
+
+    await expect(drain()).rejects.toThrow(NoAnswerError);
+    expect(text).toBe('');
+  });
+
+  it('keeps an answer that was cut off after the marker', async () => {
+    const { service, gemini } = createDeps();
+
+    gemini.streamAnswer = vi.fn(() =>
+      textStream([`${ANSWER_SENTINEL}\n`, 'Ruritania exports'], 'length'),
+    );
+
+    let text = '';
+    for await (const chunk of service.streamAnswer(request)) text += chunk;
+
+    expect(text).toBe('Ruritania exports');
   });
 });

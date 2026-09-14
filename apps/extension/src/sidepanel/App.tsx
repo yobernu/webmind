@@ -28,14 +28,26 @@ export default function App() {
 
   const signedIn = session.status === "signed-in";
 
+  // Remembers the last page actually resolved, so a transient null does not
+  // change the chat's identity. Only a genuinely different page should reset
+  // the thread. Adjusting state during render is React's documented way to
+  // derive a value that has to persist across renders.
+  const [chatKey, setChatKey] = useState("no-page");
+
+  if (pageContext.page && pageContext.page.id !== chatKey) {
+    setChatKey(pageContext.page.id);
+  }
+
   // The background worker's snapshot wins once it arrives; useBoot's is only
   // there to fill the header on the very first paint.
   const snapshot = pageContext.snapshot ?? page;
 
   const panels: Record<WorkspaceTab, ReactNode> = {
-    // Keyed by page so switching pages remounts the chat with fresh state,
-    // rather than the hook having to reset itself.
-    chat: <Chat key={pageContext.page?.id ?? "no-page"} context={pageContext} />,
+    // Keyed by the last *real* page rather than the current one. The worker
+    // reports page: null while re-resolving (a tab title change, or the MV3
+    // worker being recycled), and remounting Chat on that transient null would
+    // abort an answer that is still streaming.
+    chat: <Chat key={chatKey} context={pageContext} />,
     notes: <Notes page={snapshot} context={pageContext} />,
     highlights: <Highlights page={snapshot} context={pageContext} />,
     history: <History />,

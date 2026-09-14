@@ -1,10 +1,13 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { redactSecret } from '../../common/crypto/secret-box.js';
 import type { AiPrompt } from '../interfaces/ai-message.interface.js';
 import type {
   AiAnswerProvider,
   AiProviderId,
+  AnswerChunk,
+  FinishReason,
 } from './ai-provider.interface.js';
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
@@ -13,8 +16,18 @@ const DEFAULT_MODELS = ['openai/gpt-5.2'];
 
 /** Shape of one streamed chunk; OpenRouter mirrors the OpenAI chat schema. */
 interface OpenRouterChunk {
-  choices?: { delta?: { content?: string | null } }[];
+  choices?: {
+    delta?: { content?: string | null };
+    finish_reason?: string | null;
+  }[];
   error?: { message?: string };
+}
+
+/** OpenAI's vocabulary; anything unrecognised is not worth guessing about. */
+function toFinishReason(raw: string): FinishReason {
+  if (raw === 'stop') return 'stop';
+  if (raw === 'length') return 'length';
+  return 'other';
 }
 
 /**
@@ -28,7 +41,7 @@ interface OpenRouterChunk {
 @Injectable()
 export class OpenRouterProvider implements AiAnswerProvider {
   private readonly logger = new Logger(OpenRouterProvider.name);
-  private readonly apiKey: string;
+  private readonly serverKey: string;
   private readonly referer: string | undefined;
   private readonly title: string | undefined;
 
@@ -37,7 +50,7 @@ export class OpenRouterProvider implements AiAnswerProvider {
   readonly models: readonly string[];
 
   constructor(configService: ConfigService) {
-    this.apiKey = configService.get<string>('OPENROUTER_API_KEY')?.trim() ?? '';
+    this.serverKey = configService.get<string>('OPENROUTER_API_KEY')?.trim() ?? '';
 
     const configured = configService
       .get<string>('OPENROUTER_MODELS')
@@ -51,9 +64,9 @@ export class OpenRouterProvider implements AiAnswerProvider {
     this.referer = configService.get<string>('OPENROUTER_SITE_URL')?.trim() || undefined;
     this.title = configService.get<string>('OPENROUTER_SITE_NAME')?.trim() || undefined;
 
-    if (!this.apiKey) {
+    if (!this.serverKey) {
       this.logger.warn(
-        'OPENROUTER_API_KEY is not set; OpenRouter is unavailable.',
+        'OPENROUTER_API_KEY is not set; OpenRouter needs a user-supplied key.',
       );
     }
   }
@@ -62,23 +75,21 @@ export class OpenRouterProvider implements AiAnswerProvider {
     return this.models[0];
   }
 
-  get isConfigured(): boolean {
-    return this.apiKey.length > 0;
+  get hasServerKey(): boolean {
+    return this.serverKey.length > 0;
   }
 
   async *streamAnswer(
     prompt: AiPrompt,
     model: string,
+    apiKey: string,
     signal?: AbortSignal,
-  ): AsyncIterable<string> {
-    if (!this.isConfigured) {
-      throw new ServiceUnavailableException('OpenRouter is not configured.');
-    }
+  ): AsyncIterable<AnswerChunk> {
 
     const response = await fetch(ENDPOINT, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         ...(this.referer ? { 'HTTP-Referer': this.referer } : {}),
         ...(this.title ? { 'X-OpenRouter-Title': this.title } : {}),
@@ -88,6 +99,11 @@ export class OpenRouterProvider implements AiAnswerProvider {
         stream: true,
         max_tokens: prompt.maxOutputTokens,
         temperature: prompt.temperature,
+        // Reasoning models may still think, but their scratchpad must not come
+        // back as the answer. Properly integrated ones return it in
+        // `delta.reasoning_details`, which this client ignores; this asks for
+        // it to be withheld entirely.
+        reasoning: { exclude: true },
         // The system instruction is a `system` turn here rather than a separate
         // field, but it is still built only from trusted constants and is the
         // first message, so page content cannot displace it.
@@ -114,22 +130,60 @@ export class OpenRouterProvider implements AiAnswerProvider {
   }
 
   /**
+   * Reads the key's own metadata. Authenticated, spends nothing, and doubles as
+   * a credit check — a key with no balance is technically valid but useless.
+   */
+  async validateKey(apiKey: string): Promise<void> {
+    let response: Response;
+
+    try {
+      response = await fetch('https://openrouter.ai/api/v1/key', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+    } catch (cause) {
+      const detail =
+        cause instanceof Error ? redactSecret(cause.message, apiKey) : '';
+      this.logger.warn(`Could not reach OpenRouter to validate a key: ${detail}`);
+
+      throw new BadRequestException(
+        'Could not reach OpenRouter to check that key. Try again.',
+      );
+    }
+
+    if (!response.ok) {
+      throw new BadRequestException(
+        response.status === 401
+          ? 'OpenRouter rejected that API key. Check it at https://openrouter.ai/keys'
+          : `OpenRouter could not verify that key (status ${response.status}).`,
+      );
+    }
+  }
+
+  /**
    * Parses the SSE body.
    *
    * Two framing details bite here: OpenRouter emits `: OPENROUTER PROCESSING`
    * keep-alive comments that must be skipped rather than parsed as JSON, and
    * the stream terminates with a literal `data: [DONE]` that is not JSON either.
+   *
+   * The finish reason arrives on a chunk before `[DONE]`, so it is carried out
+   * and emitted last. A caller that walks away mid-stream gets no `finish`
+   * event, which is correct: nothing finished.
    */
   private async *readStream(
     body: ReadableStream<Uint8Array>,
     signal?: AbortSignal,
-  ): AsyncIterable<string> {
+  ): AsyncIterable<AnswerChunk> {
     const reader = body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    // Only overwritten when the vendor says something; a stream that ends
+    // without saying why is 'other' rather than a guess at 'stop'.
+    let finish: FinishReason = 'other';
+    let ended = false;
 
     try {
-      while (!signal?.aborted) {
+      while (!ended && !signal?.aborted) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -152,7 +206,10 @@ export class OpenRouterProvider implements AiAnswerProvider {
             if (!trimmed.startsWith('data:')) continue;
 
             const payload = trimmed.slice(5).trim();
-            if (payload === '[DONE]') return;
+            if (payload === '[DONE]') {
+              ended = true;
+              break;
+            }
 
             let chunk: OpenRouterChunk;
             try {
@@ -167,13 +224,22 @@ export class OpenRouterProvider implements AiAnswerProvider {
               throw new Error(`OpenRouter error: ${chunk.error.message}`);
             }
 
-            const text = chunk.choices?.[0]?.delta?.content;
-            if (text) yield text;
+            const choice = chunk.choices?.[0];
+            if (choice?.finish_reason) {
+              finish = toFinishReason(choice.finish_reason);
+            }
+
+            const text = choice?.delta?.content;
+            if (text) yield { type: 'text', text };
           }
+
+          if (ended) break;
         }
       }
     } finally {
       await reader.cancel().catch(() => undefined);
     }
+
+    yield { type: 'finish', reason: finish };
   }
 }

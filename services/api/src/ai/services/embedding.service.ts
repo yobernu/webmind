@@ -5,6 +5,7 @@ import {
   type EmbeddingProvider,
 } from '../providers/ai-provider.interface.js';
 import { EmbeddingsRepository } from '../repositories/embeddings.repository.js';
+import { CredentialsService } from './credentials.service.js';
 import { chunkText } from '../utils/chunk-text.js';
 
 export const PAGE_SOURCE_TYPE = 'page';
@@ -16,6 +17,7 @@ export class EmbeddingService {
   constructor(
     @Inject(EMBEDDING_PROVIDER) private readonly provider: EmbeddingProvider,
     private readonly embeddings: EmbeddingsRepository,
+    private readonly credentials: CredentialsService,
   ) {}
 
   /**
@@ -30,13 +32,24 @@ export class EmbeddingService {
     pageId: string,
     content: string,
   ): Promise<number> {
-    if (!this.provider.isConfigured) return 0;
+    // Embeddings are Gemini-only, so this asks for a Gemini key specifically:
+    // the user's own if they have one, otherwise the server's.
+    const credential = await this.credentials.tryResolveCredential(
+      userId,
+      'gemini',
+    );
+
+    if (!credential) return 0;
 
     const chunks = chunkText(content);
     if (chunks.length === 0) return 0;
 
     try {
-      const vectors = await this.provider.embed(chunks, 'document');
+      const vectors = await this.provider.embed(
+        chunks,
+        'document',
+        credential.apiKey,
+      );
 
       await this.embeddings.replaceForSource(
         userId,

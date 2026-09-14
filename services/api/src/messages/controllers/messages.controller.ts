@@ -5,12 +5,11 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
-  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 
 import {
   CurrentUser,
@@ -50,13 +49,20 @@ export class MessagesController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) conversationId: string,
     @Body() dto: CreateMessageDto,
-    @Req() request: Request,
     @Res() response: Response,
   ): Promise<void> {
     // If the client hangs up, stop generating: an abandoned answer still costs
     // tokens.
+    //
+    // This must hang off the *response*, not the request. Since Node 16,
+    // `IncomingMessage`'s 'close' fires when the request completes — a few
+    // milliseconds after the POST body is read — so aborting on it cancelled
+    // every answer while the caller was still waiting. `writableEnded`
+    // distinguishes a real disconnect from a response that finished normally.
     const controller = new AbortController();
-    request.on('close', () => controller.abort());
+    response.on('close', () => {
+      if (!response.writableEnded) controller.abort();
+    });
 
     const stream = this.messages.ask(
       user.id,

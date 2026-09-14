@@ -1,13 +1,16 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
 
+import { redactSecret } from '../../common/crypto/secret-box.js';
 import type { AiPrompt } from '../interfaces/ai-message.interface.js';
 import type {
   AiAnswerProvider,
   AiProviderId,
+  AnswerChunk,
   EmbeddingProvider,
   EmbeddingPurpose,
+  FinishReason,
 } from './ai-provider.interface.js';
 
 const DEFAULT_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash-lite'];
@@ -31,12 +34,19 @@ const TASK_TYPES: Record<EmbeddingPurpose, string> = {
 /** Google's API caps how many inputs one embed call accepts. */
 const EMBED_BATCH_SIZE = 100;
 
+/** Google's vocabulary for why generation stopped. */
+function toFinishReason(raw: string): FinishReason {
+  if (raw === 'STOP') return 'stop';
+  if (raw === 'MAX_TOKENS') return 'length';
+  return 'other';
+}
+
 /** The only provider that does both jobs; OpenRouter has no embeddings API, so
  * embeddings stay here whoever is answering. */
 @Injectable()
 export class GeminiProvider implements AiAnswerProvider, EmbeddingProvider {
   private readonly logger = new Logger(GeminiProvider.name);
-  private readonly client: GoogleGenAI | null;
+  private readonly serverKey: string;
   private readonly embeddingModel: string;
 
   readonly id: AiProviderId = 'gemini';
@@ -45,7 +55,7 @@ export class GeminiProvider implements AiAnswerProvider, EmbeddingProvider {
   readonly embeddingDimensions = EMBEDDING_DIMENSIONS;
 
   constructor(configService: ConfigService) {
-    const apiKey = configService.get<string>('GEMINI_API_KEY')?.trim() ?? '';
+    this.serverKey = configService.get<string>('GEMINI_API_KEY')?.trim() ?? '';
 
     const configured = configService
       .get<string>('GEMINI_MODELS')
@@ -58,10 +68,10 @@ export class GeminiProvider implements AiAnswerProvider, EmbeddingProvider {
       configService.get<string>('GEMINI_EMBEDDING_MODEL')?.trim() ||
       DEFAULT_EMBEDDING_MODEL;
 
-    this.client = apiKey ? new GoogleGenAI({ apiKey }) : null;
-
-    if (!this.client) {
-      this.logger.warn('GEMINI_API_KEY is not set; Gemini is unavailable.');
+    if (!this.serverKey) {
+      this.logger.warn(
+        'GEMINI_API_KEY is not set; Gemini needs a user-supplied key.',
+      );
     }
   }
 
@@ -69,26 +79,28 @@ export class GeminiProvider implements AiAnswerProvider, EmbeddingProvider {
     return this.models[0];
   }
 
-  get isConfigured(): boolean {
-    return this.client !== null;
+  get hasServerKey(): boolean {
+    return this.serverKey.length > 0;
   }
 
-  private require(): GoogleGenAI {
-    if (!this.client) {
-      throw new ServiceUnavailableException('Gemini is not configured.');
-    }
-
-    return this.client;
+  /**
+   * A client per call rather than a cached one.
+   *
+   * Keys are per-user now, so caching would mean holding other people's
+   * decrypted keys in memory between requests. Construction is only local
+   * config, so this costs nothing measurable.
+   */
+  private client(apiKey: string): GoogleGenAI {
+    return new GoogleGenAI({ apiKey });
   }
 
   async *streamAnswer(
     prompt: AiPrompt,
     model: string,
+    apiKey: string,
     signal?: AbortSignal,
-  ): AsyncIterable<string> {
-    const client = this.require();
-
-    const stream = await client.models.generateContentStream({
+  ): AsyncIterable<AnswerChunk> {
+    const stream = await this.client(apiKey).models.generateContentStream({
       model,
       contents: prompt.messages.map((message) => ({
         role: message.role,
@@ -103,20 +115,30 @@ export class GeminiProvider implements AiAnswerProvider, EmbeddingProvider {
       },
     });
 
+    // Only overwritten when Google says something; a stream that ends without
+    // saying why is 'other' rather than a guess at 'stop'.
+    let finish: FinishReason = 'other';
+
     for await (const chunk of stream) {
+      const reason = chunk.candidates?.[0]?.finishReason;
+      if (reason) finish = toFinishReason(reason);
+
       const text = chunk.text;
-      if (text) yield text;
+      if (text) yield { type: 'text', text };
     }
+
+    yield { type: 'finish', reason: finish };
   }
 
   async embed(
     texts: string[],
     purpose: EmbeddingPurpose,
+    apiKey: string,
     signal?: AbortSignal,
   ): Promise<number[][]> {
-    const client = this.require();
     if (texts.length === 0) return [];
 
+    const client = this.client(apiKey);
     const vectors: number[][] = [];
 
     for (let start = 0; start < texts.length; start += EMBED_BATCH_SIZE) {
@@ -154,5 +176,21 @@ export class GeminiProvider implements AiAnswerProvider, EmbeddingProvider {
     }
 
     return vectors;
+  }
+
+  /** Lists models: authenticated, but spends no tokens. */
+  async validateKey(apiKey: string): Promise<void> {
+    try {
+      await this.client(apiKey).models.list();
+    } catch (cause) {
+      const detail =
+        cause instanceof Error ? redactSecret(cause.message, apiKey) : '';
+
+      this.logger.warn(`Gemini rejected a submitted key: ${detail.slice(0, 200)}`);
+
+      throw new BadRequestException(
+        'Google rejected that API key. Check it at https://aistudio.google.com/apikey',
+      );
+    }
   }
 }

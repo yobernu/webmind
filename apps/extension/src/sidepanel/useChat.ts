@@ -7,16 +7,23 @@ import {
   sendMessage,
   setAiPreference,
 } from "../api/conversations";
+import { listCredentials } from "../api/credentials";
 import { ApiError } from "../api/client";
 import type {
   AiProviderId,
+  AiStage,
   AiStatus,
   ChatMessage,
   Conversation,
+  ProviderCredentialSummary,
 } from "../types";
 
 export interface ChatState {
   status: AiStatus | null;
+  /** This user's own stored provider keys, masked. */
+  credentials: ProviderCredentialSummary[];
+  /** Refetches status and credentials after a key is added or removed. */
+  refreshAi: () => Promise<void>;
   conversations: Conversation[];
   conversationId: string | null;
   messages: ChatMessage[];
@@ -26,7 +33,13 @@ export interface ChatState {
   error: string | null;
   /** The question that failed, so it can be resent without retyping. */
   failedQuestion: string | null;
+  /** Phase the server last reported; null once text starts arriving. */
+  stage: AiStage | null;
+  /** When the current phase began, for the elapsed hint on a long wait. */
+  stageSince: number | null;
   ask: (question: string) => Promise<void>;
+  /** Interrupts the answer in progress, keeping whatever was generated. */
+  stop: () => void;
   /** Persists which provider/model answers this user's questions. */
   chooseProvider: (provider: AiProviderId, model?: string) => Promise<void>;
   startNewConversation: () => Promise<void>;
@@ -50,20 +63,41 @@ export function useChat(pageId: string | null): ChatState {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [failedQuestion, setFailedQuestion] = useState<string | null>(null);
+  const [credentials, setCredentials] = useState<ProviderCredentialSummary[]>([]);
+  const [stage, setStage] = useState<AiStage | null>(null);
+  const [stageSince, setStageSince] = useState<number | null>(null);
 
   // Lets an in-flight answer be abandoned when the page changes or the panel
   // unmounts, which also stops the server generating.
   const inFlight = useRef<AbortController | null>(null);
 
+  // Set by stop(); an unmount aborts the same controller but must not touch
+  // state afterwards.
+  const stopped = useRef(false);
+
+  const loadAi = useCallback(async (signal?: AbortSignal) => {
+    const [next, keys] = await Promise.all([
+      fetchAiStatus(signal).catch(() => null),
+      listCredentials(signal).catch(() => [] as ProviderCredentialSummary[]),
+    ]);
+
+    if (signal?.aborted) return;
+    setStatus(next);
+    setCredentials(keys);
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
 
-    fetchAiStatus(controller.signal)
-      .then(setStatus)
-      .catch(() => setStatus(null));
+    // Fetching from the API is the external-system case the lint rule exempts;
+    // the state is set after the await, not during the render pass.
+    // oxlint-disable-next-line react/set-state-in-effect
+    void loadAi(controller.signal);
 
     return () => controller.abort();
-  }, []);
+  }, [loadAi]);
+
+  const refreshAi = useCallback(() => loadAi(), [loadAi]);
 
   // Loads what was already asked on this page. No state reset is needed here:
   // App keys this component by page id, so a different page arrives as a fresh
@@ -113,9 +147,12 @@ export function useChat(pageId: string | null): ChatState {
       setError(null);
       setFailedQuestion(null);
       setStreaming("");
+      setStage(null);
+      setStageSince(null);
 
       const controller = new AbortController();
       inFlight.current = controller;
+      stopped.current = false;
 
       // Show the question immediately; the server has already stored it by the
       // time the first delta arrives.
@@ -134,9 +171,11 @@ export function useChat(pageId: string | null): ChatState {
       // twice locally while the server holds its own record.
       let settled: string | null = null;
 
-      try {
-        let targetId = conversationId;
+      // Declared outside the try so the catch can still reconcile against the
+      // conversation a stopped answer was written to.
+      let targetId = conversationId;
 
+      try {
         if (!targetId) {
           const created = await createConversation(pageId, trimmed);
           targetId = created.id;
@@ -151,9 +190,17 @@ export function useChat(pageId: string | null): ChatState {
           trimmed,
           controller.signal,
         )) {
+          if (event.type === "status") {
+            setStage(event.stage);
+            setStageSince(Date.now());
+            continue;
+          }
+
           if (event.type === "delta") {
             answer += event.text;
             setStreaming(answer);
+            // The arriving text is its own progress indicator from here.
+            setStage(null);
             continue;
           }
 
@@ -181,25 +228,39 @@ export function useChat(pageId: string | null): ChatState {
           settled = targetId;
         }
       } catch (cause) {
-        if (cause instanceof DOMException && cause.name === "AbortError") return;
+        if (cause instanceof DOMException && cause.name === "AbortError") {
+          // An unmount aborts the same controller; only a deliberate stop
+          // should touch state afterwards.
+          if (!stopped.current) return;
 
-        setError(
-          cause instanceof ApiError
-            ? cause.message
-            : "The question could not be sent",
-        );
-        setFailedQuestion(trimmed);
-        setStreaming("");
+          // Stopping is not a failure. The server persists whatever it
+          // generated before the disconnect, so the thread is reconciled
+          // against that rather than guessed at, and no error is shown.
+          setStreaming("");
+          settled = targetId;
+        } else {
+          setError(
+            cause instanceof ApiError
+              ? cause.message
+              : "The question could not be sent",
+          );
+          setFailedQuestion(trimmed);
+          setStreaming("");
+        }
       } finally {
         if (inFlight.current === controller) inFlight.current = null;
         setPending(false);
+        setStage(null);
+        setStageSince(null);
 
         // Replace the optimistic view with the stored thread, so what is shown
         // is what would be seen on reopening the panel.
-        if (settled && !controller.signal.aborted) {
+        if (settled && (!controller.signal.aborted || stopped.current)) {
           try {
-            const stored = await listMessages(settled, controller.signal);
-            if (!controller.signal.aborted) setMessages(stored);
+            // A stopped request has an aborted signal, so the reconcile runs
+            // unsignalled rather than being cancelled before it starts.
+            const stored = await listMessages(settled);
+            setMessages(stored);
           } catch {
             // Keep the optimistic view; it is close enough to carry on with.
           }
@@ -208,6 +269,13 @@ export function useChat(pageId: string | null): ChatState {
     },
     [conversationId, pageId, pending],
   );
+
+  const stop = useCallback(() => {
+    // The abort propagates to the server, which stops generating and persists
+    // the partial answer; the catch above then reconciles the thread.
+    stopped.current = true;
+    inFlight.current?.abort();
+  }, []);
 
   const startNewConversation = useCallback(async () => {
     if (!pageId) return;
@@ -257,6 +325,8 @@ export function useChat(pageId: string | null): ChatState {
 
   return {
     status,
+    credentials,
+    refreshAi,
     conversations,
     conversationId,
     messages,
@@ -264,7 +334,10 @@ export function useChat(pageId: string | null): ChatState {
     pending,
     error,
     failedQuestion,
+    stage,
+    stageSince,
     ask,
+    stop,
     chooseProvider,
     startNewConversation,
     openConversation,

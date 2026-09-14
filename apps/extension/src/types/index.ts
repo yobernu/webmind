@@ -138,25 +138,50 @@ export type AiProviderId = 'gemini' | 'openrouter'
 export interface AiProviderSummary {
   id: AiProviderId
   label: string
-  /** False when the server holds no credential for it. */
+  /** Usable by this user: the server has a key, or they supplied one. */
   enabled: boolean
+  /** Whether the server holds a shared key for it. */
+  hasServerKey: boolean
+  /** Whether this user has stored their own key for it. */
+  hasUserKey: boolean
   models: string[]
   defaultModel: string
+}
+
+/** A stored key as the API describes it: identifiable, never usable. */
+export interface ProviderCredentialSummary {
+  provider: AiProviderId
+  /** Masked tail, e.g. "••••9f2a". */
+  hint: string
+  createdAt: string
+  lastUsedAt: string | null
 }
 
 /** What the server can do and what this user's questions will use, so the panel
  * can explain itself rather than failing when the user presses send. */
 export interface AiStatus {
   enabled: boolean
+  /** Whether the server can store user keys at all (encryption configured). */
+  byokAvailable: boolean
   providers: AiProviderSummary[]
-  selected: { provider: AiProviderId; model: string } | null
+  selected: {
+    provider: AiProviderId
+    model: string
+    /** True when answers will spend this user's own quota. */
+    usingUserKey: boolean
+  } | null
   /** False when no embedding provider is configured; long pages then fall back
    * to truncation instead of similarity retrieval. */
   retrievalAvailable: boolean
 }
 
+/** Phase the server reports while preparing an answer. Each is real work; there
+ * is no stage for anything the backend does not actually do. */
+export type AiStage = 'reading' | 'searching' | 'thinking'
+
 /** Events streamed by POST /conversations/:id/messages. */
 export type AiStreamEvent =
+  | { type: 'status'; stage: AiStage }
   | { type: 'delta'; text: string }
   | { type: 'done'; messageId: string; content: string }
   | { type: 'error'; message: string }

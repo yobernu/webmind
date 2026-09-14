@@ -90,7 +90,13 @@ async function syncPage(snapshot: PageSnapshot, tabId: number): Promise<void> {
     return
   }
 
-  publish({ status: 'detecting', snapshot, page: null, error: null })
+  // Re-detecting the page we are already showing must not blank it. Reporting
+  // `page: null` here discards known-good state, which flickers the workspace
+  // and — because the panel keys the chat by page id — would unmount an
+  // in-flight answer. Any title change on the active tab triggers this path.
+  const samePage = current.snapshot?.url === snapshot.url ? current.page : null
+
+  publish({ status: 'detecting', snapshot, page: samePage, error: null })
 
   const extracted = await extractContent(tabId)
   if (stale()) return
