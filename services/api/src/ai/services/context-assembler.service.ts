@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import {
+  EMBEDDING_TIMEOUT_MS,
   MAX_CONTEXT_CHARS,
   MAX_CONTEXT_CHUNKS,
 } from '../constants/prompt.constants.js';
@@ -10,6 +11,7 @@ import {
 } from '../providers/ai-provider.interface.js';
 import { EmbeddingsRepository } from '../repositories/embeddings.repository.js';
 import { CredentialsService } from './credentials.service.js';
+import { withTimeout } from '../utils/timeout.js';
 import { PAGE_SOURCE_TYPE } from './embedding.service.js';
 
 export interface AssembleInput {
@@ -101,6 +103,7 @@ export class ContextAssemblerService {
         [question],
         'query',
         credential.apiKey,
+        withTimeout(EMBEDDING_TIMEOUT_MS),
       );
       if (!queryEmbedding) return null;
 

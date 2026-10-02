@@ -20,6 +20,8 @@ import {
 import { RegisterDto } from '../dto/register.dto.js';
 import { LoginDto } from '../dto/login.dto.js';
 import { GoogleAuthService } from './google-auth.service.js';
+import type { PublicUserSource } from '../../users/entities/user.entity.js';
+import { toPublicUser } from '../../users/mappers/user.mapper.js';
 
 @Injectable()
 export class AuthService {
@@ -102,7 +104,14 @@ export class AuthService {
     if (byEmail) {
       // Safe to adopt: the provider vouched for this email address, which
       // verifyIdToken already required.
-      return this.usersService.linkIdentity(byEmail.id, profile);
+      //
+      // Password sign-ups never verify the address, so anyone could have
+      // registered it first and be waiting for the real owner to arrive (an
+      // account pre-hijack). Now that ownership is proven, a password set
+      // before that proof is revoked; the owner can keep using Google.
+      return this.usersService.linkIdentity(byEmail.id, profile, {
+        revokePassword: !byEmail.emailVerified && byEmail.passwordHash !== null,
+      });
     }
 
     try {
@@ -155,23 +164,6 @@ export class AuthService {
       user: toPublicUser(user),
     };
   }
-}
-
-interface PublicUserSource {
-  id: string;
-  email: string;
-  name: string | null;
-  avatarUrl: string | null;
-}
-
-/** The account fields the extension is allowed to see. */
-function toPublicUser(user: PublicUserSource) {
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    avatarUrl: user.avatarUrl,
-  };
 }
 
 /** Prisma's unique-constraint code, without importing the error class here. */

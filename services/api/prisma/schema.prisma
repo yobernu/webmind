@@ -36,7 +36,7 @@ model User {
   avatarUrl     String?
   emailVerified Boolean @default(false)
 
-  /// Chosen answer provider ("gemini" | "openrouter") and model. Null means
+  /// Chosen answer provider ("gemini" | "openrouter" | "anthropic") and model. Null means
   /// the server default. Stored per user rather than per device so the choice
   /// follows the account.
   aiProvider String?
@@ -143,11 +143,21 @@ model Message {
   role    MessageRole
   content String
 
+  /// Position within the conversation, from 1. Assigned under a row lock on
+  /// the conversation, so ordering never depends on timestamps that two
+  /// writes in the same millisecond can share (FR-05).
+  sequence Int
+
+  /// An answer cut short by a failure, a timeout or the user stopping it.
+  /// Kept so nothing generated is lost, but not replayed as context.
+  incomplete Boolean @default(false)
+
   createdAt DateTime @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  @@index([conversationId, createdAt])
+  // Also serves lookups by conversation, so no separate index is needed.
+  @@unique([conversationId, sequence])
   @@map("messages")
 }
 
@@ -231,7 +241,7 @@ model ProviderCredential {
   id     String @id @default(uuid())
   userId String
 
-  /// Matches AI_PROVIDER_IDS: "gemini" | "openrouter".
+  /// Matches AI_PROVIDER_IDS: "gemini" | "openrouter" | "anthropic".
   provider String
 
   ciphertext String

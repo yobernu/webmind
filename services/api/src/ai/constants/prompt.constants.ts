@@ -41,6 +41,15 @@ export const MAX_HISTORY_MESSAGES = 10;
 export const MAX_OUTPUT_TOKENS = 2_048;
 export const ANSWER_TEMPERATURE = 0.3;
 
+/**
+ * Wall-clock ceilings on provider calls (SRS §8 cost controls, FR-10). An
+ * answer may legitimately stream for a while; an embedding or key check that
+ * takes this long has hung.
+ */
+export const ANSWER_TIMEOUT_MS = 120_000;
+export const EMBEDDING_TIMEOUT_MS = 20_000;
+export const KEY_CHECK_TIMEOUT_MS = 10_000;
+
 /** How many chunks similarity search may contribute. */
 export const MAX_CONTEXT_CHUNKS = 6;
 

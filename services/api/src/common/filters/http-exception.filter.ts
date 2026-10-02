@@ -71,14 +71,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
+    const prismaFault = describePrismaFault(exception);
     const fault =
-      describePrismaFault(exception) ??
+      prismaFault ??
       this.describeConnectionFault(exception) ??
       this.describeUnknownFault(exception);
 
+    // A Prisma error's message and stack quote the failing call's arguments,
+    // which can be a user's page text or notes (SRS §9.1: logs must not expose
+    // page content). Only the summary line is logged for those.
     this.logger.error(
-      `${fault.code} -> ${fault.status}: ${firstLine(exception)}`,
-      exception instanceof Error ? exception.stack : undefined,
+      `${fault.code} -> ${fault.status}: ${summaryLine(exception)}`,
+      prismaFault || !(exception instanceof Error) ? undefined : exception.stack,
     );
 
     httpAdapter.reply(
@@ -117,8 +121,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 }
 
-/** Prisma messages are multi-line with the offending query rendered in full. */
-function firstLine(exception: unknown): string {
+/**
+ * The last non-empty line of an error message. Prisma messages are multi-line,
+ * with the call site and its arguments first and the actual cause last, so the
+ * tail is both the most useful line and the one free of user data.
+ */
+function summaryLine(exception: unknown): string {
   const message = exception instanceof Error ? exception.message : String(exception);
 
   return (

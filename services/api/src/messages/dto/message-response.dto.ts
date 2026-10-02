@@ -6,6 +6,7 @@ export function toMessageResponse(message: MessageRow): MessageEntity {
     conversationId: message.conversationId,
     role: message.role,
     content: message.content,
+    incomplete: message.incomplete ?? false,
     createdAt: message.createdAt,
   };
 }

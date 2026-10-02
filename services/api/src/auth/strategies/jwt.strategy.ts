@@ -1,11 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 
+import { UsersService } from '../../users/services/users.service.js';
+import type { AuthenticatedUser } from '../decorators/current-user.decorator.js';
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(configService: ConfigService) {
+  constructor(
+    configService: ConfigService,
+    private readonly users: UsersService,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
 
@@ -17,10 +23,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string; email: string }) {
-    return {
-      id: payload.sub,
-      email: payload.email,
-    };
+  /**
+   * A valid signature only proves the token was issued; the account may have
+   * been deleted since. Checking keeps a deleted user's 7-day token from
+   * reaching anything.
+   */
+  async validate(payload: { sub: string; email: string }): Promise<AuthenticatedUser> {
+    const user = await this.users.findById(payload.sub);
+
+    if (!user) {
+      throw new UnauthorizedException('This account no longer exists');
+    }
+
+    return { id: user.id, email: user.email };
   }
 }

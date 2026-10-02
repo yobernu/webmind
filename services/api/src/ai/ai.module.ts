@@ -7,6 +7,7 @@ import {
   AI_ANSWER_PROVIDERS,
   EMBEDDING_PROVIDER,
 } from './providers/ai-provider.interface.js';
+import { AnthropicProvider } from './providers/anthropic.provider.js';
 import { GeminiProvider } from './providers/gemini.provider.js';
 import { OpenRouterProvider } from './providers/openrouter.provider.js';
 import { CredentialsRepository } from './repositories/credentials.repository.js';
@@ -24,18 +25,21 @@ import { PromptBuilderService } from './services/prompt-builder.service.js';
   providers: [
     GeminiProvider,
     OpenRouterProvider,
+    AnthropicProvider,
 
     // Declaration order is the fallback order when a user has no preference.
     {
       provide: AI_ANSWER_PROVIDERS,
-      inject: [GeminiProvider, OpenRouterProvider],
-      useFactory: (gemini: GeminiProvider, openRouter: OpenRouterProvider) => [
-        gemini,
-        openRouter,
-      ],
+      inject: [GeminiProvider, OpenRouterProvider, AnthropicProvider],
+      useFactory: (
+        gemini: GeminiProvider,
+        openRouter: OpenRouterProvider,
+        anthropic: AnthropicProvider,
+      ) => [gemini, openRouter, anthropic],
     },
 
-    // Embeddings are Gemini-only: OpenRouter has no embeddings endpoint.
+    // Embeddings are Gemini-only: neither OpenRouter nor Anthropic offers an
+    // embeddings endpoint.
     { provide: EMBEDDING_PROVIDER, useExisting: GeminiProvider },
 
     AiService,

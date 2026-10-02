@@ -21,7 +21,6 @@ function createDeps(options: { pageOwned?: boolean; latest?: unknown } = {}) {
     findLatestForPage: vi.fn(async () =>
       options.latest === undefined ? null : options.latest,
     ),
-    touch: vi.fn(async () => row),
   };
 
   const pages = {

@@ -100,6 +100,8 @@ describe('ContextAssemblerService', () => {
         [input.question],
         'query',
         'test-key',
+        // Bounded, so a hung embedding call cannot stall the answer.
+        expect.any(AbortSignal),
       );
     });
 

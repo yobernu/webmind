@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_CONTEXT_CHARS } from '../../ai/constants/prompt.constants.js';
 import type { AiService } from '../../ai/services/ai.service.js';
 import { NoAnswerError } from '../../ai/utils/answer-stream.js';
-import type { ConversationsRepository } from '../../conversations/repositories/conversations.repository.js';
 import type { ConversationsService } from '../../conversations/services/conversations.service.js';
 import { MessageRole } from '../../generated/prisma/enums.js';
 import type { PagesService } from '../../pages/services/pages.service.js';
@@ -51,11 +50,19 @@ function createDeps(
   } = {},
 ) {
   const written: { role: MessageRole; content: string }[] = [];
+  // Index-aligned with `written`.
+  const writeOptions: ({ incomplete?: boolean; title?: string } | undefined)[] = [];
   let nextId = 1;
 
   const messages = {
-    create: vi.fn(async (_conversationId: string, role: MessageRole, content: string) => {
+    create: vi.fn(async (
+      _conversationId: string,
+      role: MessageRole,
+      content: string,
+      options?: { incomplete?: boolean; title?: string },
+    ) => {
       written.push({ role, content });
+      writeOptions.push(options);
       return {
         id: `msg-${nextId++}`,
         conversationId: 'conv-1',
@@ -99,8 +106,6 @@ function createDeps(
     }),
   };
 
-  const conversationRows = { touch: vi.fn(async () => conversation) };
-
   const pages = {
     findOwnedWithContent: vi.fn(async () =>
       options.longPage
@@ -110,7 +115,7 @@ function createDeps(
   };
 
   const ai = {
-    isConfigured: options.configured ?? true,
+    isConfiguredFor: vi.fn(async () => options.configured ?? true),
     prepare: vi.fn(
       async (_request: { history: { role: string; content: string }[] }) => ({
         provider: { id: 'gemini' },
@@ -140,15 +145,14 @@ function createDeps(
 
   return {
     written,
+    writeOptions,
     messages,
     conversations,
-    conversationRows,
     pages,
     ai,
     service: new MessagesService(
       messages as unknown as MessagesRepository,
       conversations as unknown as ConversationsService,
-      conversationRows as unknown as ConversationsRepository,
       pages as unknown as PagesService,
       ai as unknown as AiService,
     ),
@@ -181,6 +185,13 @@ describe('MessagesService.ask', () => {
       { role: MessageRole.USER, content: 'What is exported?' },
       { role: MessageRole.ASSISTANT, content: 'Ruritania exports timber.' },
     ]);
+    expect(deps.writeOptions[1]).toEqual({ incomplete: false });
+  });
+
+  it('refuses a user with no usable provider, asking per user', async () => {
+    await drain(deps.service.ask('user-1', 'conv-1', 'q'));
+
+    expect(deps.ai.isConfiguredFor).toHaveBeenCalledWith('user-1');
   });
 
   // --- FR-10: "AI timeouts and provider errors shall not silently discard the
@@ -225,6 +236,8 @@ describe('MessagesService.ask', () => {
         role: MessageRole.ASSISTANT,
         content: 'Ruritania exports ',
       });
+      // Kept, but flagged so it is not replayed as a finished answer.
+      expect(failing.writeOptions[1]).toEqual({ incomplete: true });
       expect(events.at(-1)?.type).toBe('error');
     });
 
@@ -451,10 +464,7 @@ describe('MessagesService.ask', () => {
     it('titles an untitled conversation from its first question', async () => {
       await drain(deps.service.ask('user-1', 'conv-1', 'What is exported?'));
 
-      expect(deps.conversationRows.touch).toHaveBeenCalledWith(
-        'conv-1',
-        'What is exported?',
-      );
+      expect(deps.writeOptions[0]).toEqual({ title: 'What is exported?' });
     });
 
     it('leaves an existing title alone', async () => {
@@ -462,10 +472,7 @@ describe('MessagesService.ask', () => {
 
       await drain(titled.service.ask('user-1', 'conv-1', 'another question'));
 
-      expect(titled.conversationRows.touch).toHaveBeenCalledWith(
-        'conv-1',
-        undefined,
-      );
+      expect(titled.writeOptions[0]).toEqual({ title: undefined });
     });
   });
 });

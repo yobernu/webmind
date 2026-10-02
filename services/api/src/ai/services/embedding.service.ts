@@ -6,7 +6,9 @@ import {
 } from '../providers/ai-provider.interface.js';
 import { EmbeddingsRepository } from '../repositories/embeddings.repository.js';
 import { CredentialsService } from './credentials.service.js';
+import { EMBEDDING_TIMEOUT_MS } from '../constants/prompt.constants.js';
 import { chunkText } from '../utils/chunk-text.js';
+import { withTimeout } from '../utils/timeout.js';
 
 export const PAGE_SOURCE_TYPE = 'page';
 
@@ -49,6 +51,7 @@ export class EmbeddingService {
         chunks,
         'document',
         credential.apiKey,
+        withTimeout(EMBEDDING_TIMEOUT_MS),
       );
 
       await this.embeddings.replaceForSource(

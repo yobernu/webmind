@@ -32,11 +32,13 @@ import {
   type AssembledContext,
 } from './context-assembler.service.js';
 import { PromptBuilderService } from './prompt-builder.service.js';
+import { ANSWER_TIMEOUT_MS } from '../constants/prompt.constants.js';
 import {
   extractAnswer,
   NoAnswerError,
   type FilterOutcome,
 } from '../utils/answer-stream.js';
+import { ProviderTimeoutError, withTimeout } from '../utils/timeout.js';
 
 export interface AnswerRequest {
   userId: string;
@@ -92,12 +94,6 @@ export class AiService {
     );
 
     return usable.filter((provider): provider is AiAnswerProvider => provider !== null);
-  }
-
-  /** Whether any provider has a server key. User keys are per-user, so this is
-   * only the server-wide answer used before a user is known. */
-  get isConfigured(): boolean {
-    return this.providers.some((provider) => provider.hasServerKey);
   }
 
   async isConfiguredFor(userId: string): Promise<boolean> {
@@ -269,40 +265,58 @@ export class AiService {
     // used, which is true even if generation then fails.
     void this.credentials.markUsed(prepared.credential);
 
+    // The caller's signal stops generation when they hang up; the timeout
+    // stops a provider that has stalled without either finishing or failing.
+    const bounded = withTimeout(ANSWER_TIMEOUT_MS, signal);
+    const timedOut = () => bounded.aborted && !signal?.aborted;
+
     const raw = prepared.provider.streamAnswer(
       prepared.prompt,
       prepared.model,
       prepared.credential.apiKey,
-      signal,
+      bounded,
     );
 
     let outcome: FilterOutcome | undefined;
 
-    yield* extractAnswer(raw, (result) => {
-      outcome = result;
+    try {
+      yield* extractAnswer(raw, (result) => {
+        outcome = result;
 
-      if (result.abandoned) {
-        this.logger.warn(
-          `${prepared.model} was cut off after ${result.discarded} characters without reaching an answer.`,
-        );
-        return;
-      }
+        if (result.abandoned) {
+          this.logger.warn(
+            `${prepared.model} was cut off after ${result.discarded} characters without reaching an answer.`,
+          );
+          return;
+        }
 
-      if (!result.honoured) {
-        // Worth knowing: this model needs watching, and its users will see
-        // whatever preamble it produced.
-        this.logger.warn(
-          `${prepared.model} did not emit the answer marker; its full output was shown.`,
-        );
-        return;
-      }
+        if (!result.honoured) {
+          // Worth knowing: this model needs watching, and its users will see
+          // whatever preamble it produced.
+          this.logger.warn(
+            `${prepared.model} did not emit the answer marker; its full output was shown.`,
+          );
+          return;
+        }
 
-      if (result.discarded > 0) {
-        this.logger.debug(
-          `${prepared.model}: withheld ${result.discarded} characters of reasoning.`,
-        );
+        if (result.discarded > 0) {
+          this.logger.debug(
+            `${prepared.model}: withheld ${result.discarded} characters of reasoning.`,
+          );
+        }
+      });
+    } catch (error) {
+      if (timedOut()) {
+        throw new ProviderTimeoutError(prepared.model, ANSWER_TIMEOUT_MS);
       }
-    });
+      throw error;
+    }
+
+    // Some providers end their stream quietly on abort rather than throwing, so
+    // a timeout must be detected here too or a cut-off answer passes as whole.
+    if (timedOut()) {
+      throw new ProviderTimeoutError(prepared.model, ANSWER_TIMEOUT_MS);
+    }
 
     // Thrown after the loop rather than inside the callback, so a truncation
     // that still produced an answer keeps it: only the case with nothing to

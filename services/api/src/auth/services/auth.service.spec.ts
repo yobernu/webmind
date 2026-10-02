@@ -13,6 +13,7 @@ interface StoredUser {
   passwordHash: string | null;
   name: string | null;
   avatarUrl: string | null;
+  emailVerified?: boolean;
 }
 
 const GOOGLE_IDENTITY: GoogleIdentity = {
@@ -81,8 +82,9 @@ function createUsersStub(seed: StoredUser[] = []) {
       return user;
     }),
 
-    linkIdentity: vi.fn(async (userId: string, profile: any) => {
+    linkIdentity: vi.fn(async (userId: string, profile: any, options?: { revokePassword?: boolean }) => {
       const user = users.get(userId)!;
+      if (options?.revokePassword) user.passwordHash = null;
       user.name = user.name ?? profile.name ?? null;
       user.avatarUrl = user.avatarUrl ?? profile.avatarUrl ?? null;
       identities.set(key(profile.provider, profile.providerAccountId), userId);
@@ -162,10 +164,34 @@ describe('AuthService.loginWithGoogle', () => {
     expect(result.user.id).toBe('user-existing');
     expect(usersStub.stub.linkIdentity).toHaveBeenCalledOnce();
     expect(usersStub.stub.createWithIdentity).not.toHaveBeenCalled();
-    // The password still works after linking.
-    expect(usersStub.users.get('user-existing')?.passwordHash).toBe('$2b$12$hash');
+    // A password set before anyone proved owning the address is revoked, so
+    // whoever registered it first cannot keep a way in.
+    expect(usersStub.users.get('user-existing')?.passwordHash).toBeNull();
     // Profile gaps get filled in from Google.
     expect(result.user.name).toBe('Ada Lovelace');
+  });
+
+  it('keeps the password of an account whose email was already verified', async () => {
+    usersStub = createUsersStub([
+      {
+        id: 'user-verified',
+        email: 'ada@example.com',
+        passwordHash: '$2b$12$hash',
+        name: 'Ada',
+        avatarUrl: null,
+        emailVerified: true,
+      },
+    ]);
+    const { service } = createService(usersStub.stub);
+
+    await service.loginWithGoogle('id-token');
+
+    expect(usersStub.stub.linkIdentity).toHaveBeenCalledWith(
+      'user-verified',
+      expect.anything(),
+      { revokePassword: false },
+    );
+    expect(usersStub.users.get('user-verified')?.passwordHash).toBe('$2b$12$hash');
   });
 
   it('recovers when a concurrent sign-in wins the unique constraint', async () => {

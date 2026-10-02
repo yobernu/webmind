@@ -8,11 +8,11 @@ import type { AiStreamEvent } from '../../ai/dto/ai-completion.dto.js';
 import type { AiMessage } from '../../ai/interfaces/ai-message.interface.js';
 import { AiService } from '../../ai/services/ai.service.js';
 import { NoAnswerError } from '../../ai/utils/answer-stream.js';
+import { ProviderTimeoutError } from '../../ai/utils/timeout.js';
 import {
   ConversationsService,
   titleFromQuestion,
 } from '../../conversations/services/conversations.service.js';
-import { ConversationsRepository } from '../../conversations/repositories/conversations.repository.js';
 import { MessageRole } from '../../generated/prisma/enums.js';
 import { PagesService } from '../../pages/services/pages.service.js';
 import { toMessageResponse } from '../dto/message-response.dto.js';
@@ -27,7 +27,6 @@ export class MessagesService {
   constructor(
     private readonly messages: MessagesRepository,
     private readonly conversations: ConversationsService,
-    private readonly conversationRows: ConversationsRepository,
     private readonly pages: PagesService,
     private readonly ai: AiService,
   ) {}
@@ -62,11 +61,13 @@ export class MessagesService {
       conversationId,
     );
 
-    if (!this.ai.isConfigured) {
+    // A user with only their own key is configured even when the server has
+    // none, so this must be asked per user.
+    if (!(await this.ai.isConfiguredFor(userId))) {
       // Raised before anything is written, so the question is not stranded in a
       // conversation that can never be answered.
       throw new ServiceUnavailableException(
-        'AI is not configured on this server.',
+        'AI is not configured on this server. Add your own API key to continue.',
       );
     }
 
@@ -78,12 +79,10 @@ export class MessagesService {
     // History as it stood before this question.
     const history = await this.historyFor(conversationId);
 
-    await this.messages.create(conversationId, MessageRole.USER, question);
-
-    await this.conversationRows.touch(
-      conversationId,
-      conversation.title ? undefined : titleFromQuestion(question),
-    );
+    // The question and the conversation's activity stamp are written together.
+    await this.messages.create(conversationId, MessageRole.USER, question, {
+      title: conversation.title ? undefined : titleFromQuestion(question),
+    });
 
     let answer = '';
     // `log` is for us and may contain provider internals; `userMessage` is set
@@ -128,7 +127,11 @@ export class MessagesService {
         failure = {
           log: error instanceof Error ? error.message : 'The AI request failed',
           userMessage:
-            error instanceof NoAnswerError ? error.userMessage : undefined,
+            error instanceof NoAnswerError
+              ? error.userMessage
+              : error instanceof ProviderTimeoutError
+                ? 'The AI provider took too long to answer.'
+                : undefined,
         };
         this.logger.warn(
           `Answer stream failed for conversation ${conversationId}: ${failure.log}`,
@@ -143,10 +146,9 @@ export class MessagesService {
           conversationId,
           MessageRole.ASSISTANT,
           answer,
+          { incomplete: failure !== null || Boolean(signal?.aborted) },
         )
       : null;
-
-    if (stored) await this.conversationRows.touch(conversationId);
 
     // Nothing to report to a caller who asked us to stop. Reaching this with
     // no text is the normal case when Stop is pressed before the answer

@@ -5,6 +5,8 @@ export interface MessageEntity {
   conversationId: string;
   role: MessageRole;
   content: string;
+  /** True for an answer cut short by a failure or a stop. */
+  incomplete: boolean;
   createdAt: Date;
 }
 
@@ -13,5 +15,6 @@ export interface MessageRow {
   conversationId: string;
   role: MessageRole;
   content: string;
+  incomplete?: boolean;
   createdAt: Date;
 }

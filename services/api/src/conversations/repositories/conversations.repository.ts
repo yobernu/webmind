@@ -35,16 +35,4 @@ export class ConversationsRepository {
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
     });
   }
-
-  /** Keeps `updatedAt` meaningful as "last activity" (PRD §9.6) and gives the
-   * conversation a title from its first question when it had none. */
-  async touch(conversationId: string, title?: string) {
-    return this.prisma.conversation.update({
-      where: { id: conversationId },
-      data: {
-        updatedAt: new Date(),
-        ...(title === undefined ? {} : { title }),
-      },
-    });
-  }
 }

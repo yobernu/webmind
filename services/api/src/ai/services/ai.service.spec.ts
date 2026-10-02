@@ -8,7 +8,9 @@ import type {
   EmbeddingProvider,
   FinishReason,
 } from '../providers/ai-provider.interface.js';
+import { ANSWER_TIMEOUT_MS } from '../constants/prompt.constants.js';
 import { ANSWER_SENTINEL, NoAnswerError } from '../utils/answer-stream.js';
+import { ProviderTimeoutError } from '../utils/timeout.js';
 import { AiService } from './ai.service.js';
 import type { ContextAssemblerService } from './context-assembler.service.js';
 import type { PromptBuilderService } from './prompt-builder.service.js';
@@ -309,7 +311,8 @@ describe('AiService.streamAnswer', () => {
       expect.anything(),
       'anthropic/claude-x',
       'server-openrouter-key',
-      undefined,
+      // Always bounded by the answer timeout, even with no caller signal.
+      expect.any(AbortSignal),
     );
   });
 
@@ -333,12 +336,37 @@ describe('AiService.streamAnswer', () => {
 
     for await (const _ of service.streamAnswer(request, controller.signal)) void _;
 
-    expect(gemini.streamAnswer).toHaveBeenCalledWith(
-      expect.anything(),
-      'gemini-3.8-flash',
-      'server-gemini-key',
-      controller.signal,
-    );
+    // The provider gets a signal combining the caller's with a timeout, so
+    // what matters is that the caller hanging up still reaches it.
+    const passed = (gemini.streamAnswer.mock.calls[0] as unknown[])[3] as AbortSignal;
+    expect(passed.aborted).toBe(false);
+    controller.abort();
+    expect(passed.aborted).toBe(true);
+  });
+
+  it('reports a stalled provider as a timeout rather than a finished answer', async () => {
+    const { service, gemini } = createDeps();
+    // Stands in for the timeout timer, which fake timers cannot reach.
+    const clock = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(clock.signal);
+
+    // A provider that ends its stream quietly once aborted, as some do.
+    gemini.streamAnswer.mockImplementation(async function* () {
+      yield { type: 'text', text: ANSWER_SENTINEL };
+      yield { type: 'text', text: 'partial' };
+      clock.abort();
+    } as never);
+
+    try {
+      await expect(
+        (async () => {
+          for await (const _ of service.streamAnswer(request)) void _;
+        })(),
+      ).rejects.toThrow(ProviderTimeoutError);
+      expect(timeout).toHaveBeenCalledWith(ANSWER_TIMEOUT_MS);
+    } finally {
+      timeout.mockRestore();
+    }
   });
 });
 
@@ -385,7 +413,7 @@ describe('AiService with BYOK', () => {
       expect.anything(),
       'gemini-3.8-flash',
       'user-gemini-key',
-      undefined,
+      expect.any(AbortSignal),
     );
   });
 

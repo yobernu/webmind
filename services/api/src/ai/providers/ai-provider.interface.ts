@@ -2,7 +2,7 @@ import type { AiPrompt } from '../interfaces/ai-message.interface.js';
 
 /** Stable identifiers for the answer providers, used in the API and stored as
  * the user's preference and credential rows. */
-export const AI_PROVIDER_IDS = ['gemini', 'openrouter'] as const;
+export const AI_PROVIDER_IDS = ['gemini', 'openrouter', 'anthropic'] as const;
 export type AiProviderId = (typeof AI_PROVIDER_IDS)[number];
 
 export function isAiProviderId(value: unknown): value is AiProviderId {

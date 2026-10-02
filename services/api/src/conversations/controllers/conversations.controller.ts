@@ -6,21 +6,18 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 
 import {
   CurrentUser,
   type AuthenticatedUser,
 } from '../../auth/decorators/current-user.decorator.js';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
 import { CreateConversationDto } from '../dto/create-conversation.dto.js';
 import { ListConversationsQueryDto } from '../dto/list-conversations-query.dto.js';
 import { ConversationsService } from '../services/conversations.service.js';
 
 /** Routes named exactly as SRS §6 specifies them. */
 @Controller()
-@UseGuards(JwtAuthGuard)
 export class ConversationsController {
   constructor(private readonly conversations: ConversationsService) {}
 

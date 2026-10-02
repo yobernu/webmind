@@ -9,14 +9,12 @@ import {
   Inject,
   Param,
   Put,
-  UseGuards,
 } from '@nestjs/common';
 
 import {
   CurrentUser,
   type AuthenticatedUser,
 } from '../../auth/decorators/current-user.decorator.js';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
 import {
   StoreCredentialDto,
   UpdateAiPreferenceDto,
@@ -30,7 +28,6 @@ import { AiService } from '../services/ai.service.js';
 import { CredentialsService } from '../services/credentials.service.js';
 
 @Controller('ai')
-@UseGuards(JwtAuthGuard)
 export class AiController {
   constructor(
     private readonly aiService: AiService,

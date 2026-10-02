@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { redactSecret } from '../../common/crypto/secret-box.js';
+import { KEY_CHECK_TIMEOUT_MS } from '../constants/prompt.constants.js';
+import { withTimeout } from '../utils/timeout.js';
 import type { AiPrompt } from '../interfaces/ai-message.interface.js';
 import type {
   AiAnswerProvider,
@@ -139,6 +141,7 @@ export class OpenRouterProvider implements AiAnswerProvider {
     try {
       response = await fetch('https://openrouter.ai/api/v1/key', {
         headers: { Authorization: `Bearer ${apiKey}` },
+        signal: withTimeout(KEY_CHECK_TIMEOUT_MS),
       });
     } catch (cause) {
       const detail =
