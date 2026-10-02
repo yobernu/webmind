@@ -1,9 +1,9 @@
 import type { PaintableHighlight } from '../types'
 import { anchorSelector, buildTextIndex, offsetsToRange, type TextIndex } from '../utils/anchor'
 
-const HIGHLIGHT_NAME = 'webmind'
-const ACTIVE_NAME = 'webmind-active'
-const STYLE_ID = 'webmind-highlight-style'
+const HIGHLIGHT_NAME = 'gloss'
+const ACTIVE_NAME = 'gloss-active'
+const STYLE_ID = 'gloss-highlight-style'
 
 /**
  * Paints saved highlights with the CSS Custom Highlight API, which styles
@@ -22,9 +22,21 @@ function ensureStyle(): void {
 
   const style = document.createElement('style')
   style.id = STYLE_ID
+  // Highlighter yellow, translucent so the page's own text colour still reads.
+  // The active state (scrolled to from the panel) deepens and underlines,
+  // since ::highlight only accepts colour, background and decoration.
   style.textContent = `
-    ::highlight(${HIGHLIGHT_NAME}) { background-color: rgba(255, 213, 79, 0.55); }
-    ::highlight(${ACTIVE_NAME}) { background-color: rgba(134, 59, 255, 0.45); }
+    ::highlight(${HIGHLIGHT_NAME}) { background-color: rgba(245, 213, 71, 0.45); }
+    ::highlight(${ACTIVE_NAME}) {
+      background-color: rgba(232, 191, 31, 0.7);
+      text-decoration: underline 2px rgba(150, 110, 0, 0.9);
+    }
+    @media (forced-colors: active) {
+      ::highlight(${HIGHLIGHT_NAME}), ::highlight(${ACTIVE_NAME}) {
+        background-color: Mark;
+        color: MarkText;
+      }
+    }
   `
   ;(document.head ?? document.documentElement).append(style)
 }

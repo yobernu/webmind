@@ -22,6 +22,7 @@ import {
 } from "../ui";
 import { LONG_QUOTE, LONG_URL, RTL_TEXT } from "./fixtures";
 import "./gallery.css";
+import PagePreview from "./PagePreview";
 import { screens } from "./screens";
 
 /**
@@ -188,6 +189,14 @@ function Primitives() {
 }
 
 export default function Gallery() {
+  if (ONLY === "page") {
+    return (
+      <div className="gallery">
+        <PagePreview dark={matchMedia("(prefers-color-scheme: dark)").matches} />
+      </div>
+    );
+  }
+
   return (
     <div className="gallery">
       {ONLY !== "screens" &&
