@@ -12,7 +12,7 @@ services:
       POSTGRES_DB: webmind
     ports:
       # 5432 on this machine is already taken by another project's database,
-      # so WebMind uses 5433. Keep DATABASE_URL in services/api/.env in sync.
+      # so Gloss AI uses 5433. Keep DATABASE_URL in services/api/.env in sync.
       - "5433:5432"
     volumes:
       - webmind-pgdata:/var/lib/postgresql/data

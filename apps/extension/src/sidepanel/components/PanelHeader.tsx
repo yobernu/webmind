@@ -28,9 +28,10 @@ function PageStatus({ context }: { context: PageContext }) {
     case "unsupported":
       return <span className="page-status">Can’t read this page</span>;
     case "error":
+      // The reason gets its own line below; it is too important to truncate.
       return (
-        <span className="page-status" data-tone="error" title={context.error ?? undefined}>
-          <Icon name="alert" size={12} /> {context.error ?? "Not saved"}
+        <span className="page-status" data-tone="error">
+          <Icon name="alert" size={12} /> Not saved
         </span>
       );
     default:
@@ -80,6 +81,11 @@ export default function PanelHeader({
             <span className="page-domain">{snapshot?.domain}</span>
             <PageStatus context={context} />
           </p>
+          {context.status === "error" && context.error && (
+            <p className="page-error" role="alert">
+              {context.error}
+            </p>
+          )}
         </div>
       )}
     </header>

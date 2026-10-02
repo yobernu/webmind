@@ -118,6 +118,13 @@
   color: var(--color-danger);
 }
 
+.page-error {
+  margin-top: 6px;
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+  overflow-wrap: anywhere;
+}
+
 /* --- Ask ----------------------------------------------------------------- */
 
 .ask {
