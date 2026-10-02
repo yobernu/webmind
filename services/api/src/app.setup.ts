@@ -10,7 +10,7 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
  * Auth uses the Authorization header rather than cookies, so credentials are
  * not enabled.
  *
- * Precedence: an explicit CORS_ALLOWED_ORIGINS list; otherwise WebMind's own
+ * Precedence: an explicit CORS_ALLOWED_ORIGINS list; otherwise the Gloss AI
  * extension (EXTENSION_ID) plus localhost outside production; otherwise, in
  * development only, any extension.
  */

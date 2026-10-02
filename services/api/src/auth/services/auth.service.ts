@@ -67,7 +67,7 @@ export class AuthService {
   }
 
   /**
-   * Exchanges a Google ID token from the extension for a WebMind session.
+   * Exchanges a Google ID token from the extension for a Gloss AI session.
    *
    * Resolution order: the linked Google identity, then an existing account with
    * the same (Google-verified) email, then a brand new account.

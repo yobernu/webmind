@@ -84,7 +84,7 @@ export class GoogleAuthService {
     }
 
     // An unverified address cannot be trusted to belong to the signer, and
-    // accepting it would let anyone claim someone else's WebMind account.
+    // accepting it would let anyone claim someone else's Gloss AI account.
     if (!payload.email_verified) {
       throw new UnauthorizedException(GOOGLE_UNVERIFIED_EMAIL_MESSAGE);
     }

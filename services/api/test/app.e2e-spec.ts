@@ -80,7 +80,7 @@ function events(body: string): { type: string; [key: string]: unknown }[] {
     .map((json) => JSON.parse(json));
 }
 
-describe.skipIf(!hasDatabase)('WebMind API (e2e)', () => {
+describe.skipIf(!hasDatabase)('Gloss AI API (e2e)', () => {
   let app: INestApplication;
   let http: ReturnType<typeof request>;
 

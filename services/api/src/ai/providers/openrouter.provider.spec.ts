@@ -284,8 +284,8 @@ describe('OpenRouterProvider request shape', () => {
     const provider = new OpenRouterProvider(
       config({
         OPENROUTER_API_KEY: 'sk-test',
-        OPENROUTER_SITE_URL: 'https://webmind.example',
-        OPENROUTER_SITE_NAME: 'WebMind',
+        OPENROUTER_SITE_URL: 'https://gloss.example',
+        OPENROUTER_SITE_NAME: 'Gloss AI',
       }),
     );
 
@@ -294,8 +294,8 @@ describe('OpenRouterProvider request shape', () => {
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
     const headers = init.headers as Record<string, string>;
 
-    expect(headers['HTTP-Referer']).toBe('https://webmind.example');
-    expect(headers['X-OpenRouter-Title']).toBe('WebMind');
+    expect(headers['HTTP-Referer']).toBe('https://gloss.example');
+    expect(headers['X-OpenRouter-Title']).toBe('Gloss AI');
   });
 });
 
