@@ -27,7 +27,10 @@ import { ANSWER_SENTINEL } from '../src/ai/utils/answer-stream.js';
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 
-process.env.JWT_SECRET ??= 'e2e-secret-that-is-at-least-thirty-two-characters-long';
+process.env.JWT_SECRET ||= 'e2e-secret-that-is-at-least-thirty-two-characters-long';
+// The fake provider below stands in for Gemini, and the server only offers a
+// provider it holds a key for. The value never leaves the process.
+process.env.GEMINI_API_KEY ||= 'e2e-placeholder-key';
 
 /** Answers every question with a fixed, recognisable reply. */
 const fakeAnswerer: AiAnswerProvider = {
@@ -44,12 +47,15 @@ const fakeAnswerer: AiAnswerProvider = {
   async validateKey() {},
 };
 
-/** No embeddings, so long pages fall back to truncation and nothing calls out. */
-const noEmbeddings: EmbeddingProvider = {
-  hasServerKey: false,
+/** Deterministic vectors of the stored dimensionality, so page indexing runs
+ * against the real pgvector column without calling out. */
+const fakeEmbeddings: EmbeddingProvider = {
+  hasServerKey: true,
   embeddingDimensions: 768,
-  async embed() {
-    return [];
+  async embed(texts: string[]) {
+    return texts.map((_, index) =>
+      Array.from({ length: 768 }, (__, dimension) => (dimension === index % 768 ? 1 : 0)),
+    );
   },
 };
 
@@ -102,7 +108,7 @@ describe.skipIf(!hasDatabase)('WebMind API (e2e)', () => {
       .overrideProvider(AI_ANSWER_PROVIDERS)
       .useValue([fakeAnswerer])
       .overrideProvider(EMBEDDING_PROVIDER)
-      .useValue(noEmbeddings)
+      .useValue(fakeEmbeddings)
       .compile();
 
     app = configureApp(moduleRef.createNestApplication());

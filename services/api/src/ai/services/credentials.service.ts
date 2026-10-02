@@ -17,6 +17,17 @@ import { UsersService } from '../../users/services/users.service.js';
 import type { AiProviderId } from '../providers/ai-provider.interface.js';
 import { CredentialsRepository } from '../repositories/credentials.repository.js';
 
+/**
+ * The environment variable holding each provider's server key. A Record, so
+ * adding a provider id without its variable fails to compile instead of
+ * silently sending one vendor's key to another.
+ */
+const SERVER_KEY_VARIABLES: Record<AiProviderId, string> = {
+  gemini: 'GEMINI_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+  anthropic: 'ANTHROPIC_API_KEY',
+};
+
 /** Version stamped into new rows and into the AAD. */
 const CURRENT_KEY_VERSION = 1;
 
@@ -94,10 +105,10 @@ export class CredentialsService {
 
   /** The server-wide key for a provider, if one is configured. */
   private serverKey(provider: AiProviderId): string | null {
-    const variable =
-      provider === 'gemini' ? 'GEMINI_API_KEY' : 'OPENROUTER_API_KEY';
-
-    return this.configService.get<string>(variable)?.trim() || null;
+    return (
+      this.configService.get<string>(SERVER_KEY_VARIABLES[provider])?.trim() ||
+      null
+    );
   }
 
   /**
