@@ -1,29 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createConversation,
-  fetchAiStatus,
   listConversations,
   listMessages,
   sendMessage,
-  setAiPreference,
 } from "../api/conversations";
-import { listCredentials } from "../api/credentials";
 import { ApiError } from "../api/client";
-import type {
-  AiProviderId,
-  AiStage,
-  AiStatus,
-  ChatMessage,
-  Conversation,
-  ProviderCredentialSummary,
-} from "../types";
+import type { AiStage, ChatMessage, Conversation } from "../types";
 
 export interface ChatState {
-  status: AiStatus | null;
-  /** This user's own stored provider keys, masked. */
-  credentials: ProviderCredentialSummary[];
-  /** Refetches status and credentials after a key is added or removed. */
-  refreshAi: () => Promise<void>;
   conversations: Conversation[];
   conversationId: string | null;
   messages: ChatMessage[];
@@ -40,8 +25,6 @@ export interface ChatState {
   ask: (question: string) => Promise<void>;
   /** Interrupts the answer in progress, keeping whatever was generated. */
   stop: () => void;
-  /** Persists which provider/model answers this user's questions. */
-  chooseProvider: (provider: AiProviderId, model?: string) => Promise<void>;
   startNewConversation: () => Promise<void>;
   openConversation: (conversationId: string) => Promise<void>;
   dismissError: () => void;
@@ -55,7 +38,6 @@ const LOCAL_ID_PREFIX = "local-";
  * never shown against the wrong page.
  */
 export function useChat(pageId: string | null): ChatState {
-  const [status, setStatus] = useState<AiStatus | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -63,7 +45,6 @@ export function useChat(pageId: string | null): ChatState {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [failedQuestion, setFailedQuestion] = useState<string | null>(null);
-  const [credentials, setCredentials] = useState<ProviderCredentialSummary[]>([]);
   const [stage, setStage] = useState<AiStage | null>(null);
   const [stageSince, setStageSince] = useState<number | null>(null);
 
@@ -78,30 +59,6 @@ export function useChat(pageId: string | null): ChatState {
   // Set once the user picks, starts or asks in a thread, so the restore below
   // cannot land afterwards and swap in the page's latest thread instead.
   const chosen = useRef(false);
-
-  const loadAi = useCallback(async (signal?: AbortSignal) => {
-    const [next, keys] = await Promise.all([
-      fetchAiStatus(signal).catch(() => null),
-      listCredentials(signal).catch(() => [] as ProviderCredentialSummary[]),
-    ]);
-
-    if (signal?.aborted) return;
-    setStatus(next);
-    setCredentials(keys);
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    // Fetching from the API is the external-system case the lint rule exempts;
-    // the state is set after the await, not during the render pass.
-    // oxlint-disable-next-line react/set-state-in-effect
-    void loadAi(controller.signal);
-
-    return () => controller.abort();
-  }, [loadAi]);
-
-  const refreshAi = useCallback(() => loadAi(), [loadAi]);
 
   // Loads what was already asked on this page. No state reset is needed here:
   // App keys this component by page id, so a different page arrives as a fresh
@@ -317,24 +274,12 @@ export function useChat(pageId: string | null): ChatState {
     [],
   );
 
-  /** Persists the provider/model choice and adopts the server's new view. */
-  const chooseProvider = useCallback(
-    async (provider: AiProviderId, model?: string) => {
-      const next = await setAiPreference(provider, model);
-      setStatus(next);
-    },
-    [],
-  );
-
   const dismissError = useCallback(() => {
     setError(null);
     setFailedQuestion(null);
   }, []);
 
   return {
-    status,
-    credentials,
-    refreshAi,
     conversations,
     conversationId,
     messages,
@@ -346,7 +291,6 @@ export function useChat(pageId: string | null): ChatState {
     stageSince,
     ask,
     stop,
-    chooseProvider,
     startNewConversation,
     openConversation,
     dismissError,

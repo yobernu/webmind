@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { AiProviderId, AiStage, AiStatus, PageContext, PanelIntent } from "../../types";
+import type { AiState } from "../useAi";
 import { useChat } from "../useChat";
 import KeyManager from "./KeyManager";
 import ModelPicker from "./ModelPicker";
@@ -35,10 +36,12 @@ function quoteForQuestion(text: string): string {
 
 export default function Chat({
   context,
+  ai,
   intent,
   onIntentHandled,
 }: {
   context: PageContext;
+  ai: AiState;
   intent: PanelIntent | null;
   onIntentHandled: () => void;
 }) {
@@ -95,7 +98,7 @@ export default function Chat({
     if (thread) thread.scrollTop = thread.scrollHeight;
   }, [chat.messages, chat.streaming]);
 
-  const aiDisabled = chat.status !== null && !chat.status.enabled;
+  const aiDisabled = ai.status !== null && !ai.status.enabled;
   const canAsk = Boolean(page) && !aiDisabled && !chat.pending;
 
   const submit = (event: FormEvent) => {
@@ -259,17 +262,17 @@ export default function Chat({
         )}
       </form>
 
-      {chat.status && (
+      {ai.status && (
         <>
           <ModelPicker
-            status={chat.status}
-            onChange={chat.chooseProvider}
+            status={ai.status}
+            onChange={ai.chooseProvider}
             disabled={chat.pending}
           />
           <KeyManager
-            status={chat.status}
-            credentials={chat.credentials}
-            onChanged={chat.refreshAi}
+            status={ai.status}
+            credentials={ai.credentials}
+            onChanged={ai.refresh}
           />
         </>
       )}
@@ -279,10 +282,10 @@ export default function Chat({
           the user can change it. */}
       <p className="chat-disclosure">
         This page’s text is sent to{" "}
-        {chat.status?.selected
-          ? `${providerLabel(chat.status, chat.status.selected.provider)} (${chat.status.selected.model})`
+        {ai.status?.selected
+          ? `${providerLabel(ai.status, ai.status.selected.provider)} (${ai.status.selected.model})`
           : "the AI provider"}{" "}
-        to answer your questions{chat.status?.selected?.usingUserKey ? " using your own API key" : ""}.
+        to answer your questions{ai.status?.selected?.usingUserKey ? " using your own API key" : ""}.
       </p>
     </div>
   );

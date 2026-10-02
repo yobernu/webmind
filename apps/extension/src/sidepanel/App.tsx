@@ -31,6 +31,7 @@ import Notes from "./components/Notes";
 import PageBar from "./components/PageBar";
 import PrivacyPanel from "./components/PrivacyPanel";
 import "./sidepanel.css";
+import { useAi } from "./useAi";
 import { useBoot } from "./useBoot";
 import { usePageContext } from "./usePageContext";
 import { useSession } from "./useSession";
@@ -70,6 +71,7 @@ export default function App() {
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const signedIn = session.status === "signed-in";
+  const ai = useAi(signedIn);
 
   // null while the stored acknowledgement is being read.
   const [privacyAcked, setPrivacyAcked] = useState<boolean | null>(null);
@@ -268,6 +270,8 @@ export default function App() {
     if (id === "history") void workspace.refresh();
   };
 
+  const overlay = privacyAcked === false || showPrivacy;
+
   const panels: Record<WorkspaceTab, ReactNode> = {
     // Keyed by the last *real* page rather than the current one. The worker
     // reports page: null while re-resolving (a tab title change, or the MV3
@@ -277,6 +281,7 @@ export default function App() {
       <Chat
         key={chatKey}
         context={pageContext}
+        ai={ai}
         intent={intent}
         onIntentHandled={clearIntent}
       />
@@ -378,16 +383,20 @@ export default function App() {
             )}
 
             <main className="panel-body" role="tabpanel">
-              {privacyAcked === false || showPrivacy ? (
+              {overlay && (
                 <PrivacyPanel
                   acknowledged={privacyAcked === true}
                   onAcknowledge={acknowledgePrivacy}
                   onClose={() => setShowPrivacy(false)}
                   onDeleteAccount={removeAccount}
                 />
-              ) : (
-                panels[tab]
               )}
+              {/* The chat stays mounted while hidden: unmounting it aborts an
+                  answer that is still streaming and drops the draft. */}
+              <div className="panel-view" hidden={overlay || tab !== "chat"}>
+                {panels.chat}
+              </div>
+              {!overlay && tab !== "chat" && panels[tab]}
             </main>
           </>
         ) : (
