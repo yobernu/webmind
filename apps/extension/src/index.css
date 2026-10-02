@@ -1,5 +1,6 @@
 @import './ui/tokens.css';
 @import './ui/base.css';
+@import './ui/components.css';
 
 /*
  * Temporary aliases so screens not yet moved to the design system keep

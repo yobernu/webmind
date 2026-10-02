@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Highlight, PageContext, PanelIntent } from "../../types";
+import { Button, EmptyState, Entry, EntryList, IconButton, InlineAlert, Quote } from "../../ui";
 import { sendToActiveTab } from "../../utils/page";
 import { formatRelative } from "../../utils/time";
 import type { WorkspaceState } from "../useWorkspace";
@@ -8,7 +9,7 @@ function scrollTo(id: string) {
   void sendToActiveTab({ type: "SCROLL_TO_HIGHLIGHT", id });
 }
 
-function HighlightItem({
+function HighlightEntry({
   highlight,
   missing,
   onAsk,
@@ -24,47 +25,49 @@ function HighlightItem({
   const [confirming, setConfirming] = useState(false);
 
   return (
-    <li className="highlight" data-missing={missing || undefined}>
-      <button
-        type="button"
-        className="highlight-text"
-        onClick={() => scrollTo(highlight.id)}
-        disabled={missing}
-        title={missing ? undefined : "Show on the page"}
-      >
-        {highlight.selectedText}
-      </button>
-      <div className="item-meta">
-        <time dateTime={highlight.createdAt}>
-          {formatRelative(highlight.createdAt)}
-          {missing && " · not found on the page as it is now"}
-        </time>
-        <span className="item-actions">
-          {confirming ? (
-            <>
-              <button type="button" onClick={() => setConfirming(false)}>
-                Keep
-              </button>
-              <button type="button" className="danger" onClick={onDelete}>
-                Remove
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" onClick={onAsk}>
-                Ask AI
-              </button>
-              <button type="button" onClick={onNote}>
-                Note
-              </button>
-              <button type="button" onClick={() => setConfirming(true)}>
-                Remove
-              </button>
-            </>
-          )}
-        </span>
-      </div>
-    </li>
+    <Entry
+      as="li"
+      tone={missing ? "muted" : "highlight"}
+      pinActions={confirming}
+      meta={
+        missing ? (
+          "Not found on this version of the page"
+        ) : (
+          <time dateTime={highlight.createdAt}>{formatRelative(highlight.createdAt)}</time>
+        )
+      }
+      actions={
+        confirming ? (
+          <>
+            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+              Keep
+            </Button>
+            <Button size="sm" variant="danger" onClick={onDelete}>
+              Remove
+            </Button>
+          </>
+        ) : (
+          <>
+            <IconButton size="sm" icon="ask" label="Ask about this passage" onClick={onAsk} />
+            <IconButton size="sm" icon="note" label="Add a note on this passage" onClick={onNote} />
+            <IconButton size="sm" icon="trash" label="Remove highlight" onClick={() => setConfirming(true)} />
+          </>
+        )
+      }
+    >
+      {missing ? (
+        <Quote clamp={6}>{highlight.selectedText}</Quote>
+      ) : (
+        <button
+          type="button"
+          className="highlight-jump"
+          onClick={() => scrollTo(highlight.id)}
+          aria-label={`Show on the page: ${highlight.selectedText.slice(0, 80)}`}
+        >
+          <Quote clamp={6}>{highlight.selectedText}</Quote>
+        </button>
+      )}
+    </Entry>
   );
 }
 
@@ -100,48 +103,61 @@ export default function Highlights({
 
   if (!page) {
     return (
-      <div className="placeholder">
-        <h2>Highlights</h2>
-        <p>
+      <div className="screen-pad">
+        <EmptyState title={context.status === "unsupported" ? "Can’t highlight here" : "Finding this page…"}>
           {context.status === "unsupported"
-            ? "WebMind cannot highlight this kind of page."
-            : "Waiting for WebMind to identify this page."}
-        </p>
+            ? "Browser pages, the Web Store and local files can’t be highlighted."
+            : "Highlights attach to the page once Gloss has identified it."}
+        </EmptyState>
       </div>
     );
   }
 
+  const missingCount = workspace.highlights.filter((highlight) => missingIds.has(highlight.id)).length;
+
   return (
-    <div className="workspace-list">
+    <div className="screen-pad">
       {workspace.error && (
-        <div className="inline-error" role="alert">
+        <InlineAlert
+          tone="error"
+          action={
+            <Button size="sm" variant="ghost" onClick={workspace.dismissError}>
+              Dismiss
+            </Button>
+          }
+        >
           <p>{workspace.error}</p>
-          <button type="button" onClick={workspace.dismissError}>
-            Dismiss
-          </button>
-        </div>
+        </InlineAlert>
       )}
 
       {workspace.loading ? (
-        <p className="empty">Loading highlights…</p>
+        <p className="list-status">Loading highlights…</p>
       ) : workspace.highlights.length === 0 ? (
-        <p className="empty">
-          Select text on the page and choose “Highlight” to save it here. Saved
-          passages are marked again whenever you come back.
-        </p>
+        <EmptyState title="Nothing highlighted yet">
+          Select text on the page and choose Highlight. Gloss marks it again whenever you come back.
+        </EmptyState>
       ) : (
-        <ul className="items">
-          {workspace.highlights.map((highlight) => (
-            <HighlightItem
-              key={highlight.id}
-              highlight={highlight}
-              missing={missingIds.has(highlight.id)}
-              onAsk={() => onIntent({ kind: "ask", text: highlight.selectedText })}
-              onNote={() => onIntent({ kind: "note", sourceText: highlight.selectedText })}
-              onDelete={() => void workspace.deleteHighlight(highlight.id)}
-            />
-          ))}
-        </ul>
+        <>
+          {missingCount > 0 && (
+            <p className="list-status">
+              {missingCount === 1
+                ? "1 passage has changed or moved on the page."
+                : `${missingCount} passages have changed or moved on the page.`}
+            </p>
+          )}
+          <EntryList label="Highlights">
+            {workspace.highlights.map((highlight) => (
+              <HighlightEntry
+                key={highlight.id}
+                highlight={highlight}
+                missing={missingIds.has(highlight.id)}
+                onAsk={() => onIntent({ kind: "ask", text: highlight.selectedText })}
+                onNote={() => onIntent({ kind: "note", sourceText: highlight.selectedText })}
+                onDelete={() => void workspace.deleteHighlight(highlight.id)}
+              />
+            ))}
+          </EntryList>
+        </>
       )}
     </div>
   );

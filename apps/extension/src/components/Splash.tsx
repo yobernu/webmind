@@ -1,4 +1,5 @@
 import type { BootPhase } from '../types'
+import { BrandMark, Wordmark } from '../ui'
 import './Splash.css'
 
 interface SplashProps {
@@ -8,29 +9,15 @@ interface SplashProps {
   status: string
 }
 
+/** Shown for a moment while the session restores; deliberately quiet. */
 export default function Splash({ phase, status }: SplashProps) {
   return (
-    <div
-      className="splash"
-      data-state={phase}
-      role="status"
-      aria-live="polite"
-      aria-busy={phase === 'booting'}
-    >
-      <div className="splash-mark">
-        <img src="/favicon.svg" alt="" width="56" height="54" />
+    <div className="splash" data-state={phase} role="status" aria-live="polite" aria-busy={phase === 'booting'}>
+      <div className="splash-lockup">
+        <BrandMark size={44} />
+        <Wordmark height={26} />
       </div>
-
-      <div className="splash-wordmark">
-        <h1>WebMind</h1>
-        <p>Your persistent AI workspace for the web.</p>
-      </div>
-
-      <div className="splash-progress">
-        <span />
-      </div>
-
-      <p className="splash-status">{status}</p>
+      <p className="visually-hidden">{status}</p>
     </div>
   )
 }

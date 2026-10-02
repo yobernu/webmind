@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { API_BASE_URL } from "../../config";
+import { BrandLockup, Button, InlineAlert, TextButton, TextField } from "../../ui";
 import { getRedirectUrl, isIdentityAvailable } from "../../utils/oauth";
 import type { SessionState } from "../useSession";
 import GoogleMark from "./GoogleMark";
@@ -25,10 +26,7 @@ export default function AuthPanel({ session }: { session: SessionState }) {
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (session.pending) return;
-
-    void (mode === "sign-in"
-      ? session.signIn(email, password)
-      : session.signUp(email, password));
+    void (mode === "sign-in" ? session.signIn(email, password) : session.signUp(email, password));
   };
 
   const switchMode = () => {
@@ -37,49 +35,38 @@ export default function AuthPanel({ session }: { session: SessionState }) {
   };
 
   return (
-    <form className="auth" onSubmit={submit}>
+    <div className="auth">
+      <BrandLockup height={20} />
+
       <div className="auth-intro">
-        <h2>{mode === "sign-in" ? "Welcome back" : "Create your workspace"}</h2>
-        <p>
-          {mode === "sign-in"
-            ? "Sign in to sync notes, highlights and conversations across the web."
-            : `Continue with Google, or pick a password of at least ${MIN_PASSWORD_LENGTH} characters.`}
+        <h1 className="auth-title">{mode === "sign-in" ? "Sign in" : "Create your account"}</h1>
+        <p className="auth-lede">
+          Your questions, notes and highlights stay with each page you read, and come back when you
+          return.
         </p>
       </div>
 
-      {googleEnabled && (
-        <>
-          <button
-            type="button"
-            className="auth-google"
-            onClick={() => void session.signInWithGoogle()}
-            disabled={session.pending || !identityAvailable}
-            title={
-              identityAvailable
-                ? undefined
-                : "Available only in the installed extension"
-            }
-          >
-            <GoogleMark />
-            Continue with Google
-          </button>
+      <form className="auth-form" onSubmit={submit}>
+        {googleEnabled && (
+          <>
+            <button
+              type="button"
+              className="btn btn-secondary btn-md auth-google"
+              onClick={() => void session.signInWithGoogle()}
+              disabled={session.pending || !identityAvailable}
+              title={identityAvailable ? undefined : "Available only in the installed extension"}
+            >
+              <GoogleMark />
+              <span>Continue with Google</span>
+            </button>
+            <div className="auth-divider" role="separator">
+              <span>or with email</span>
+            </div>
+          </>
+        )}
 
-          {!identityAvailable && (
-            <p className="auth-note">
-              Google sign-in needs the installed extension — the dev preview has
-              no access to chrome.identity.
-            </p>
-          )}
-
-          <div className="auth-divider">
-            <span>or</span>
-          </div>
-        </>
-      )}
-
-      <label className="auth-field">
-        <span>Email</span>
-        <input
+        <TextField
+          label="Email"
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -88,68 +75,50 @@ export default function AuthPanel({ session }: { session: SessionState }) {
           required
           disabled={session.pending}
         />
-      </label>
-
-      <label className="auth-field">
-        <span>Password</span>
-        <input
+        <TextField
+          label="Password"
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          autoComplete={
-            mode === "sign-in" ? "current-password" : "new-password"
-          }
+          autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
           minLength={mode === "sign-up" ? MIN_PASSWORD_LENGTH : undefined}
+          hint={mode === "sign-up" ? `At least ${MIN_PASSWORD_LENGTH} characters.` : undefined}
           required
           disabled={session.pending}
         />
-      </label>
 
-      {session.error && (
-        <div
-          className="auth-error"
-          data-kind={session.errorKind ?? "unknown"}
-          role="alert"
-        >
-          <p>{session.error}</p>
-          {session.errorKind === "service" && (
-            <p className="auth-error-hint">
-              The API at {API_BASE_URL} is not responding correctly. This is not
-              a problem with your email or password.
-            </p>
-          )}
-          {session.errorKind === "provider" && (
-            <p className="auth-error-hint">
-              The Google sign-in flow could not complete. Your WebMind password
-              still works.
+        {session.error && (
+          <InlineAlert tone="error">
+            <p>{session.error}</p>
+            {session.errorKind === "service" && (
+              <p>The Gloss AI service isn’t responding. This isn’t a problem with your email or password.</p>
+            )}
+            {session.errorKind === "provider" && (
+              <p>Google sign-in couldn’t finish. Your Gloss AI password still works.</p>
+            )}
+          </InlineAlert>
+        )}
+
+        <Button type="submit" variant="primary" loading={session.pending} className="auth-submit">
+          {mode === "sign-in" ? "Sign in" : "Create account"}
+        </Button>
+      </form>
+
+      <p className="auth-switch">
+        {mode === "sign-in" ? "New to Gloss AI? " : "Already have an account? "}
+        <TextButton onClick={switchMode}>{mode === "sign-in" ? "Create an account" : "Sign in"}</TextButton>
+      </p>
+
+      {import.meta.env.DEV && (
+        <div className="auth-dev">
+          <p>API: {API_BASE_URL}</p>
+          {googleEnabled && redirectUrl && (
+            <p>
+              Google redirect URI: <code>{redirectUrl}</code>
             </p>
           )}
         </div>
       )}
-
-      <button type="submit" className="auth-submit" disabled={session.pending}>
-        {session.pending
-          ? "Working…"
-          : mode === "sign-in"
-            ? "Sign in"
-            : "Create account"}
-      </button>
-
-      <button type="button" className="auth-switch" onClick={switchMode}>
-        {mode === "sign-in"
-          ? "Need an account? Create one"
-          : "Already have an account? Sign in"}
-      </button>
-
-      <p className="auth-endpoint">{API_BASE_URL}</p>
-
-      {googleEnabled && redirectUrl && (
-        <details className="auth-setup">
-          <summary>Google setup</summary>
-          <p>Register this as an authorized redirect URI:</p>
-          <code>{redirectUrl}</code>
-        </details>
-      )}
-    </form>
+    </div>
   );
 }

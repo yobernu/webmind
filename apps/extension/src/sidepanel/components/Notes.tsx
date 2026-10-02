@@ -1,12 +1,23 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Note, PageContext, PanelIntent } from "../../types";
+import {
+  Button,
+  EmptyState,
+  Entry,
+  EntryList,
+  IconButton,
+  InlineAlert,
+  Quote,
+  TextArea,
+  useAutoGrow,
+} from "../../ui";
 import { formatRelative } from "../../utils/time";
 import type { WorkspaceState } from "../useWorkspace";
 
 /** Matches the API's MAX_NOTE_LENGTH. */
 const MAX_NOTE_LENGTH = 20_000;
 
-function NoteItem({
+function NoteEntry({
   note,
   focused,
   onSave,
@@ -35,14 +46,65 @@ function NoteItem({
     if (await onSave(draft)) setEditing(false);
   };
 
-  return (
-    <li className="note" ref={ref} data-focused={focused || undefined}>
-      {note.sourceText && <blockquote className="quote">{note.sourceText}</blockquote>}
+  const edited = note.updatedAt !== note.createdAt;
 
-      {editing ? (
-        <>
-          <textarea
-            className="note-editor"
+  return (
+    <li ref={ref}>
+      <Entry
+        as="div"
+        tone="note"
+        focused={focused}
+        pinActions={confirming || editing}
+        meta={
+          saving ? (
+            "Saving…"
+          ) : (
+            <time dateTime={note.updatedAt} title={new Date(note.updatedAt).toLocaleString()}>
+              {formatRelative(note.updatedAt)}
+              {edited && " · edited"}
+            </time>
+          )
+        }
+        actions={
+          saving ? null : editing ? (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" variant="primary" onClick={() => void save()} disabled={!draft.trim()}>
+                Save
+              </Button>
+            </>
+          ) : confirming ? (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+                Keep
+              </Button>
+              <Button size="sm" variant="danger" onClick={() => void onDelete()}>
+                Delete note
+              </Button>
+            </>
+          ) : (
+            <>
+              <IconButton
+                size="sm"
+                icon="edit"
+                label="Edit note"
+                onClick={() => {
+                  setDraft(note.content);
+                  setEditing(true);
+                }}
+              />
+              <IconButton size="sm" icon="trash" label="Delete note" onClick={() => setConfirming(true)} />
+            </>
+          )
+        }
+      >
+        {note.sourceText && <Quote clamp={3}>{note.sourceText}</Quote>}
+        {editing ? (
+          <TextArea
+            label="Edit note"
+            hideLabel
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -50,63 +112,12 @@ function NoteItem({
               if (event.key === "Escape") setEditing(false);
             }}
             maxLength={MAX_NOTE_LENGTH}
-            rows={4}
             autoFocus
           />
-          <div className="item-actions">
-            <button type="button" onClick={() => setEditing(false)}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="primary"
-              onClick={() => void save()}
-              disabled={!draft.trim()}
-            >
-              Save
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="note-content">{note.content}</p>
-          <div className="item-meta">
-            <time dateTime={note.updatedAt} title={new Date(note.updatedAt).toLocaleString()}>
-              {saving ? "Saving…" : formatRelative(note.updatedAt)}
-              {note.updatedAt !== note.createdAt && !saving && " · edited"}
-            </time>
-            {!saving && (
-              <span className="item-actions">
-                {confirming ? (
-                  <>
-                    <button type="button" onClick={() => setConfirming(false)}>
-                      Keep
-                    </button>
-                    <button type="button" className="danger" onClick={() => void onDelete()}>
-                      Delete note
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDraft(note.content);
-                        setEditing(true);
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button type="button" onClick={() => setConfirming(true)}>
-                      Delete
-                    </button>
-                  </>
-                )}
-              </span>
-            )}
-          </div>
-        </>
-      )}
+        ) : (
+          <p className="note-text">{note.content}</p>
+        )}
+      </Entry>
     </li>
   );
 }
@@ -127,7 +138,7 @@ export default function Notes({
   const [sourceText, setSourceText] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [focusedId, setFocusedId] = useState<string | null>(null);
-  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerRef = useAutoGrow(draft, 180);
 
   // A selection's "Add note", or a note picked from search, arrives as an
   // intent from the panel.
@@ -146,17 +157,16 @@ export default function Notes({
         onIntentHandled();
       }
     }
-  }, [intent, onIntentHandled, page, workspace.notes]);
+  }, [composerRef, intent, onIntentHandled, page, workspace.notes]);
 
   if (!page) {
     return (
-      <div className="placeholder">
-        <h2>Notes</h2>
-        <p>
+      <div className="screen-pad">
+        <EmptyState title={context.status === "unsupported" ? "No notes on this page" : "Finding this page…"}>
           {context.status === "unsupported"
-            ? "WebMind cannot save notes on this kind of page."
-            : "Waiting for WebMind to identify this page."}
-        </p>
+            ? "Gloss can’t save notes on browser pages, the Web Store or local files."
+            : "Notes attach to the page once Gloss has identified it."}
+        </EmptyState>
       </div>
     );
   }
@@ -175,69 +185,74 @@ export default function Notes({
     }
   };
 
+  const composing = draft.trim().length > 0 || sourceText !== null;
+
   return (
-    <div className="workspace-list">
+    <div className="notes">
       <form className="note-composer" onSubmit={(event) => void submit(event)}>
         {sourceText && (
-          <div className="quote-chip">
-            <blockquote className="quote">{sourceText}</blockquote>
-            <button
-              type="button"
-              aria-label="Remove the quoted passage"
-              onClick={() => setSourceText(null)}
-            >
-              ×
-            </button>
+          <div className="composer-quote">
+            <Quote clamp={3}>{sourceText}</Quote>
+            <IconButton size="sm" icon="close" label="Remove the quoted passage" onClick={() => setSourceText(null)} />
           </div>
         )}
         <textarea
           ref={composerRef}
+          className="composer-input"
           value={draft}
+          rows={1}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) void submit();
           }}
           placeholder={sourceText ? "Your note on this passage…" : "Write a note about this page…"}
+          aria-label="New note"
           maxLength={MAX_NOTE_LENGTH}
-          rows={3}
         />
-        <div className="note-composer-row">
-          <span className="hint">Ctrl+Enter to save</span>
-          <button type="submit" className="primary" disabled={!draft.trim() || saving}>
-            Save note
-          </button>
-        </div>
+        {composing && (
+          <div className="note-composer-foot">
+            <span className="note-composer-hint">Ctrl+Enter to save</span>
+            <Button type="submit" size="sm" variant="primary" loading={saving} disabled={!draft.trim()}>
+              Save note
+            </Button>
+          </div>
+        )}
       </form>
 
-      {workspace.error && (
-        <div className="inline-error" role="alert">
-          <p>{workspace.error}</p>
-          <button type="button" onClick={workspace.dismissError}>
-            Dismiss
-          </button>
-        </div>
-      )}
+      <div className="screen-pad notes-list">
+        {workspace.error && (
+          <InlineAlert
+            tone="error"
+            action={
+              <Button size="sm" variant="ghost" onClick={workspace.dismissError}>
+                Dismiss
+              </Button>
+            }
+          >
+            <p>{workspace.error}</p>
+          </InlineAlert>
+        )}
 
-      {workspace.loading ? (
-        <p className="empty">Loading notes…</p>
-      ) : workspace.notes.length === 0 ? (
-        <p className="empty">
-          No notes on this page yet. Select text on the page and choose “Add note” to
-          quote it.
-        </p>
-      ) : (
-        <ul className="items">
-          {workspace.notes.map((note) => (
-            <NoteItem
-              key={note.id}
-              note={note}
-              focused={note.id === focusedId}
-              onSave={(content) => workspace.updateNote(note.id, content)}
-              onDelete={() => workspace.deleteNote(note.id)}
-            />
-          ))}
-        </ul>
-      )}
+        {workspace.loading ? (
+          <p className="list-status">Loading notes…</p>
+        ) : workspace.notes.length === 0 ? (
+          <EmptyState title="No notes on this page">
+            Write one above, or select text on the page and choose Add note to quote it.
+          </EmptyState>
+        ) : (
+          <EntryList label="Notes">
+            {workspace.notes.map((note) => (
+              <NoteEntry
+                key={note.id}
+                note={note}
+                focused={note.id === focusedId}
+                onSave={(content) => workspace.updateNote(note.id, content)}
+                onDelete={() => workspace.deleteNote(note.id)}
+              />
+            ))}
+          </EntryList>
+        )}
+      </div>
     </div>
   );
 }

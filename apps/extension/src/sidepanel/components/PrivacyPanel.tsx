@@ -1,114 +1,53 @@
-import { useState } from "react";
-import { ApiError } from "../../api/client";
+import { BrandMark, Button } from "../../ui";
 
-/**
- * What WebMind does with the pages it sees (SRS §7, §9.4). Shown once before
- * anything is sent, and again from the account bar, where the account can
- * also be deleted.
- */
-export default function PrivacyPanel({
-  acknowledged,
-  onAcknowledge,
-  onClose,
-  onDeleteAccount,
-}: {
-  acknowledged: boolean;
-  onAcknowledge: () => void;
-  onClose: () => void;
-  onDeleteAccount: () => Promise<void>;
-}) {
-  const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const remove = async () => {
-    setDeleting(true);
-    setError(null);
-    try {
-      await onDeleteAccount();
-    } catch (cause) {
-      setError(
-        cause instanceof ApiError ? cause.message : "The account could not be deleted",
-      );
-      setDeleting(false);
-    }
-  };
-
+/** What Gloss AI does with the pages it sees (SRS §7, §9.4). */
+export function PrivacyExplainer() {
   return (
-    <section className="privacy" aria-labelledby="privacy-title">
-      <h2 id="privacy-title">How WebMind uses the pages you read</h2>
+    <dl className="privacy-list">
+      <div>
+        <dt>Only while this panel is open</dt>
+        <dd>Close it and Gloss stops reading or recording anything.</dd>
+      </div>
+      <div>
+        <dt>The page you’re on</dt>
+        <dd>
+          Its address, title and readable text are saved to your account, so your chats, notes and
+          highlights come back with it.
+        </dd>
+      </div>
+      <div>
+        <dt>When you ask</dt>
+        <dd>
+          The relevant page text and your recent conversation go to the AI provider named under the
+          chat. Long pages are indexed with Google’s embedding service to find the right passages.
+        </dd>
+      </div>
+      <div>
+        <dt>Notes and highlights</dt>
+        <dd>Stored with your account and visible only to you.</dd>
+      </div>
+      <div>
+        <dt>Pages can’t steer the AI</dt>
+        <dd>Page text is treated as material to answer from, never as instructions.</dd>
+      </div>
+    </dl>
+  );
+}
 
-      <ul>
-        <li>
-          <strong>Only while this panel is open.</strong> Closing it stops WebMind
-          reading or recording anything.
-        </li>
-        <li>
-          <strong>The page you are on</strong> — its address, title and readable
-          text — is saved to your WebMind account, so your chats, notes and
-          highlights reconnect when you come back.
-        </li>
-        <li>
-          <strong>When you ask a question</strong>, the relevant page text and your
-          recent conversation are sent to the AI provider shown under the chat.
-          Long pages are also indexed with Google’s embedding service to find the
-          relevant parts.
-        </li>
-        <li>
-          <strong>Your notes and highlights</strong> are stored with your account
-          and are only visible to you.
-        </li>
-        <li>
-          Page instructions never control the AI: page text is treated as material
-          to answer from, not as commands.
-        </li>
-      </ul>
-
-      {!acknowledged ? (
-        <button type="button" className="privacy-primary" onClick={onAcknowledge}>
-          I understand — start using WebMind
-        </button>
-      ) : (
-        <>
-          <div className="privacy-danger">
-            <h3>Delete your data</h3>
-            <p>
-              Deletes your account with every saved page, conversation, note,
-              highlight and stored API key. This cannot be undone.
-            </p>
-            {error && (
-              <p className="inline-error" role="alert">
-                {error}
-              </p>
-            )}
-            {confirming ? (
-              <div className="item-actions">
-                <button type="button" onClick={() => setConfirming(false)} disabled={deleting}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="danger"
-                  onClick={() => void remove()}
-                  disabled={deleting}
-                >
-                  {deleting ? "Deleting…" : "Delete everything"}
-                </button>
-              </div>
-            ) : (
-              <div className="item-actions">
-                <button type="button" className="danger" onClick={() => setConfirming(true)}>
-                  Delete my account
-                </button>
-              </div>
-            )}
-          </div>
-
-          <button type="button" className="privacy-primary" onClick={onClose}>
-            Back to the workspace
-          </button>
-        </>
-      )}
+/** First run: shown before anything about a page is sent. */
+export default function PrivacyPanel({ onAcknowledge }: { onAcknowledge: () => void }) {
+  return (
+    <section className="onboarding" aria-labelledby="onboarding-title">
+      <BrandMark size={36} />
+      <h1 id="onboarding-title" className="onboarding-title">
+        Before Gloss reads a page
+      </h1>
+      <p className="onboarding-lede">Here is exactly what is collected and where it goes.</p>
+      <PrivacyExplainer />
+      <Button variant="primary" onClick={onAcknowledge}>
+        Start reading with Gloss
+      </Button>
+      <p className="settings-note">You can review this, or delete everything, from Settings.</p>
     </section>
   );
 }

@@ -20,16 +20,17 @@ import type {
   SelectionAction,
   WorkspaceTab,
 } from "../types";
+import { Tabs, Toast, tabId, tabPanelId, type TabItem } from "../ui";
 import { isExtensionContext, openOrFocusUrl, sendToActiveTab } from "../utils/page";
 import { readStored, writeStored } from "../utils/storage";
-import { prettyUrl } from "../utils/url";
 import AuthPanel from "./components/AuthPanel";
 import Chat from "./components/Chat";
 import Highlights from "./components/Highlights";
 import History from "./components/History";
 import Notes from "./components/Notes";
-import PageBar from "./components/PageBar";
+import PanelHeader from "./components/PanelHeader";
 import PrivacyPanel from "./components/PrivacyPanel";
+import Settings, { type SettingsSection } from "./components/Settings";
 import "./sidepanel.css";
 import { useAi } from "./useAi";
 import { useBoot } from "./useBoot";
@@ -37,12 +38,17 @@ import { usePageContext } from "./usePageContext";
 import { useSession } from "./useSession";
 import { useWorkspace } from "./useWorkspace";
 
-const TABS: { id: WorkspaceTab; label: string }[] = [
-  { id: "chat", label: "Chat" },
-  { id: "notes", label: "Notes" },
-  { id: "highlights", label: "Highlights" },
-  { id: "history", label: "History" },
-];
+const TAB_LABELS: Record<WorkspaceTab, string> = {
+  chat: "Ask",
+  notes: "Notes",
+  highlights: "Highlights",
+  history: "History",
+};
+
+const TAB_ORDER: WorkspaceTab[] = ["chat", "notes", "highlights", "history"];
+
+/** Prefix for the tab and tab-panel ids. */
+const TABS_ID = "workspace";
 
 /** How long a confirmation such as "Highlight saved" stays up. */
 const NOTICE_MS = 2_500;
@@ -75,7 +81,8 @@ export default function App() {
 
   // null while the stored acknowledgement is being read.
   const [privacyAcked, setPrivacyAcked] = useState<boolean | null>(null);
-  const [showPrivacy, setShowPrivacy] = useState(false);
+  // Settings opens over the workspace, so the chat underneath keeps streaming.
+  const [settings, setSettings] = useState<{ section?: SettingsSection } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,7 +104,7 @@ export default function App() {
 
   const removeAccount = useCallback(async () => {
     await deleteAccount();
-    setShowPrivacy(false);
+    setSettings(null);
     await session.signOut();
   }, [session]);
 
@@ -270,7 +277,22 @@ export default function App() {
     if (id === "history") void workspace.refresh();
   };
 
-  const overlay = privacyAcked === false || showPrivacy;
+  // First run: nothing about a page is sent until this is acknowledged.
+  const onboarding = privacyAcked === false;
+  const covered = onboarding || settings !== null;
+
+  const openSettings = (section?: SettingsSection) => setSettings({ section });
+
+  const tabs: TabItem<WorkspaceTab>[] = TAB_ORDER.map((id) => ({
+    id,
+    label: TAB_LABELS[id],
+    count:
+      id === "notes"
+        ? workspace.counts.notes
+        : id === "highlights"
+          ? workspace.counts.highlights
+          : undefined,
+  }));
 
   const panels: Record<WorkspaceTab, ReactNode> = {
     // Keyed by the last *real* page rather than the current one. The worker
@@ -284,6 +306,7 @@ export default function App() {
         ai={ai}
         intent={intent}
         onIntentHandled={clearIntent}
+        onOpenSettings={() => openSettings("answers")}
       />
     ),
     notes: (
@@ -315,89 +338,64 @@ export default function App() {
     ),
   };
 
+  const tabPanel = (id: WorkspaceTab, children: ReactNode) => (
+    <div
+      key={id}
+      className="panel-view"
+      role="tabpanel"
+      id={tabPanelId(TABS_ID, id)}
+      aria-labelledby={tabId(TABS_ID, id)}
+      hidden={covered || tab !== id}
+    >
+      {children}
+    </div>
+  );
+
   return (
     <div className="panel" data-booted={phase === "ready"}>
       {phase !== "ready" && <Splash phase={phase} status={status} />}
 
       <div className="panel-shell" aria-hidden={phase !== "ready"}>
-        <header className="panel-header">
-          <img src="/favicon.svg" alt="" />
-          <div className="panel-header-text">
-            <strong>{snapshot?.domain ?? "WebMind"}</strong>
-            <span title={snapshot?.url}>
-              {snapshot
-                ? snapshot.title || prettyUrl(snapshot.url)
-                : "No page context"}
-            </span>
-          </div>
-        </header>
-
         {signedIn ? (
           <>
-            <div className="panel-account">
-              <span title={session.user?.email}>
-                {session.user?.name || session.user?.email}
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowPrivacy((shown) => !shown)}
-                aria-pressed={showPrivacy}
-              >
-                Privacy
-              </button>
-              <button type="button" onClick={() => void session.signOut()}>
-                Sign out
-              </button>
-            </div>
+            <PanelHeader
+              context={pageContext}
+              snapshot={snapshot}
+              user={session.user}
+              onOpenSettings={() => openSettings()}
+              onOpenPrivacy={() => openSettings("privacy")}
+              onSignOut={() => void session.signOut()}
+            />
 
-            <PageBar context={pageContext} />
-
-            <nav className="panel-tabs" role="tablist" aria-label="Workspace">
-              {TABS.map(({ id, label }) => {
-                const count =
-                  id === "notes"
-                    ? workspace.counts.notes
-                    : id === "highlights"
-                      ? workspace.counts.highlights
-                      : 0;
-
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === id}
-                    onClick={() => selectTab(id)}
-                  >
-                    {label}
-                    {count > 0 && <span className="tab-count">{count}</span>}
-                  </button>
-                );
-              })}
-            </nav>
-
-            {notice && (
-              <p className="panel-notice" role="status">
-                {notice}
-              </p>
+            {!covered && (
+              <Tabs
+                idBase={TABS_ID}
+                label="Workspace"
+                items={tabs}
+                selected={tab}
+                onSelect={selectTab}
+              />
             )}
 
-            <main className="panel-body" role="tabpanel">
-              {overlay && (
-                <PrivacyPanel
-                  acknowledged={privacyAcked === true}
-                  onAcknowledge={acknowledgePrivacy}
-                  onClose={() => setShowPrivacy(false)}
+            <main className="panel-body">
+              {onboarding && <PrivacyPanel onAcknowledge={acknowledgePrivacy} />}
+              {!onboarding && settings && (
+                <Settings
+                  ai={ai}
+                  user={session.user}
+                  initialSection={settings.section}
+                  onClose={() => setSettings(null)}
+                  onSignOut={() => void session.signOut()}
                   onDeleteAccount={removeAccount}
                 />
               )}
               {/* The chat stays mounted while hidden: unmounting it aborts an
                   answer that is still streaming and drops the draft. */}
-              <div className="panel-view" hidden={overlay || tab !== "chat"}>
-                {panels.chat}
-              </div>
-              {!overlay && tab !== "chat" && panels[tab]}
+              {tabPanel("chat", panels.chat)}
+              {!covered && tab !== "chat" && tabPanel(tab, panels[tab])}
             </main>
+
+            {notice && <Toast>{notice}</Toast>}
           </>
         ) : (
           <main className="panel-body">

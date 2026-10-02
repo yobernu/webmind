@@ -1,0 +1,58 @@
+/* Dev-only: the component gallery is served by `vite`, never packaged. */
+.gallery {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px;
+  min-height: 100%;
+  padding: 24px;
+  background: #e6e1d6;
+}
+
+.gallery-frame {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.gallery-frame-label {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-rule);
+  font: 600 10px/1.6 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-3);
+}
+
+.gallery-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.gallery-section > h2 {
+  font: 600 10px/1.6 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-3);
+}
+
+.gallery-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.gallery-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 680px;
+}
