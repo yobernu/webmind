@@ -6,21 +6,18 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
-  UseGuards,
 } from '@nestjs/common';
 
 import {
   CurrentUser,
   type AuthenticatedUser,
 } from '../../auth/decorators/current-user.decorator.js';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard.js';
 import { ResolvePageDto } from '../dto/resolve-page.dto.js';
 import { StoreContentDto } from '../dto/store-content.dto.js';
 import { PagesService } from '../services/pages.service.js';
 import { WorkspaceService } from '../services/workspace.service.js';
 
 @Controller('pages')
-@UseGuards(JwtAuthGuard)
 export class PagesController {
   constructor(
     private readonly pagesService: PagesService,

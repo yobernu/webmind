@@ -46,6 +46,34 @@ export class PagesRepository {
     });
   }
 
+  /**
+   * Everything the workspace view lists, in one round trip. Conversations are
+   * capped because a heavily used page can have many; notes and highlights are
+   * what the user came back for, so they are returned whole (up to a ceiling).
+   */
+  async workspaceCollections(userId: string, pageId: string) {
+    const [conversations, notes, highlights] = await this.prisma.$transaction([
+      this.prisma.conversation.findMany({
+        where: { userId, pageId },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 20,
+        include: { _count: { select: { messages: true } } },
+      }),
+      this.prisma.note.findMany({
+        where: { userId, pageId },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 100,
+      }),
+      this.prisma.highlight.findMany({
+        where: { userId, pageId },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: 500,
+      }),
+    ]);
+
+    return { conversations, notes, highlights };
+  }
+
   async countRelated(pageId: string) {
     const [conversations, notes, highlights] = await this.prisma.$transaction([
       this.prisma.conversation.count({ where: { pageId } }),
