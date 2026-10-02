@@ -75,6 +75,10 @@ export function useChat(pageId: string | null): ChatState {
   // state afterwards.
   const stopped = useRef(false);
 
+  // Set once the user picks, starts or asks in a thread, so the restore below
+  // cannot land afterwards and swap in the page's latest thread instead.
+  const chosen = useRef(false);
+
   const loadAi = useCallback(async (signal?: AbortSignal) => {
     const [next, keys] = await Promise.all([
       fetchAiStatus(signal).catch(() => null),
@@ -113,6 +117,7 @@ export function useChat(pageId: string | null): ChatState {
         if (controller.signal.aborted) return;
 
         setConversations(existing);
+        if (chosen.current) return;
 
         // Reopen the most recent thread, so returning to a page shows what was
         // already asked there (PRD §9.6).
@@ -121,7 +126,7 @@ export function useChat(pageId: string | null): ChatState {
 
         setConversationId(latest.id);
         const history = await listMessages(latest.id, controller.signal);
-        if (!controller.signal.aborted) setMessages(history);
+        if (!controller.signal.aborted && !chosen.current) setMessages(history);
       } catch (cause) {
         if (controller.signal.aborted) return;
         if (cause instanceof ApiError && cause.isBadCredentials) return;
@@ -143,6 +148,7 @@ export function useChat(pageId: string | null): ChatState {
       const trimmed = question.trim();
       if (!trimmed || !pageId || pending) return;
 
+      chosen.current = true;
       setPending(true);
       setError(null);
       setFailedQuestion(null);
@@ -280,6 +286,7 @@ export function useChat(pageId: string | null): ChatState {
   const startNewConversation = useCallback(async () => {
     if (!pageId) return;
 
+    chosen.current = true;
     inFlight.current?.abort();
     setConversationId(null);
     setMessages([]);
@@ -290,6 +297,7 @@ export function useChat(pageId: string | null): ChatState {
 
   const openConversation = useCallback(
     async (id: string) => {
+      chosen.current = true;
       inFlight.current?.abort();
       setConversationId(id);
       setMessages([]);

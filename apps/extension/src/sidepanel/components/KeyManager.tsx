@@ -21,6 +21,7 @@ interface KeyManagerProps {
 const KEY_PAGES: Record<AiProviderId, string> = {
   gemini: "https://aistudio.google.com/apikey",
   openrouter: "https://openrouter.ai/keys",
+  anthropic: "https://console.anthropic.com/settings/keys",
 };
 
 /**

@@ -6,4 +6,12 @@ export const API_BASE_URL = (
 /** Keys used in `chrome.storage.local`. */
 export const STORAGE_KEYS = {
   session: "webmind.session",
+  /** Which version of the privacy explanation the user has acknowledged. */
+  privacyAck: "webmind.privacyAck",
 } as const;
+
+/**
+ * Bump when what WebMind collects or where it goes changes, so everyone sees
+ * the explanation again before any more page content is sent.
+ */
+export const PRIVACY_NOTICE_VERSION = 1;

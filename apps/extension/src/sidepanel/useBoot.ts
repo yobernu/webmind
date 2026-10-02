@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { BootPhase, PageSnapshot } from '../types'
 import { delay, getActivePageSnapshot, isExtensionContext } from '../utils/page'
 
-/** Keep the splash up long enough to be read, even on a fast boot. */
-const MIN_SPLASH_MS = 1400
+/** Long enough that the splash does not flicker on a fast boot, short enough
+ * that the panel still opens quickly (SRS §9.2). */
+const MIN_SPLASH_MS = 350
 /** Must match `--wm-fade` in index.css. */
 const FADE_MS = 320
 

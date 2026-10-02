@@ -1,4 +1,5 @@
 import { loadStoredSession } from '../api/auth'
+import { PRIVACY_NOTICE_VERSION, STORAGE_KEYS } from '../config'
 import { ApiError } from '../api/client'
 import { resolvePage, uploadPageContent } from '../api/pages'
 import {
@@ -11,6 +12,7 @@ import {
   type RuntimeResponse,
 } from '../types'
 import { hashContent } from '../utils/hash'
+import { readStored } from '../utils/storage'
 import { snapshotTab } from '../utils/page'
 import { isRestrictedUrl } from '../utils/url'
 
@@ -87,6 +89,15 @@ async function syncPage(snapshot: PageSnapshot, tabId: number): Promise<void> {
   if (!session?.accessToken) {
     // Signed out: show the page locally, store nothing.
     publish({ status: 'signed-out', snapshot, page: null, error: null })
+    return
+  }
+
+  // No page URL, title or text leaves the browser before the user has read
+  // what WebMind does with them (SRS §9.4).
+  const acknowledged = await readStored<number>(STORAGE_KEYS.privacyAck).catch(() => null)
+  if (stale()) return
+  if ((acknowledged ?? 0) < PRIVACY_NOTICE_VERSION) {
+    publish({ status: 'consent-required', snapshot, page: null, error: null })
     return
   }
 
@@ -210,6 +221,15 @@ chrome.runtime.onConnect.addListener((port) => {
     panels.delete(port)
     if (panels.size === 0) stopWatching()
   })
+})
+
+// Signing in or out, or acknowledging the privacy notice, changes what may be
+// recorded for the page already on screen.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || panels.size === 0) return
+  if (STORAGE_KEYS.session in changes || STORAGE_KEYS.privacyAck in changes) {
+    void refreshFromTab()
+  }
 })
 
 chrome.runtime.onMessage.addListener(

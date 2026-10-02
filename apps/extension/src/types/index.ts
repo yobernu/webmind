@@ -30,12 +30,92 @@ export interface PageRecord {
   updatedAt: string
 }
 
+/** Response of GET /pages/:id/workspace: everything saved against a page. */
 export interface PageWorkspace {
   page: PageRecord
+  /** Most recently active first, capped; `counts` holds the true totals. */
+  conversations: Conversation[]
+  notes: Note[]
+  highlights: Highlight[]
   counts: {
     conversations: number
     notes: number
     highlights: number
+  }
+  lastActivityAt: string | null
+}
+
+export interface Note {
+  id: string
+  pageId: string
+  content: string
+  /** The passage the note was written against, when it came from a selection. */
+  sourceText: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Mirrors the W3C Web Annotation quote selector. */
+export interface TextQuoteSelector {
+  exact: string
+  prefix?: string
+  suffix?: string
+}
+
+/** Character offsets into the page's text content; a hint, not an anchor. */
+export interface TextPositionSelector {
+  start: number
+  end: number
+}
+
+export interface HighlightSelector {
+  quote: TextQuoteSelector
+  position?: TextPositionSelector
+}
+
+export interface Highlight {
+  id: string
+  pageId: string
+  selectedText: string
+  selector: HighlightSelector | null
+  createdAt: string
+}
+
+/** A selection captured by the content script, ready to save or ask about. */
+export interface CapturedSelection {
+  /** What the user saw selected, whitespace tidied. */
+  text: string
+  selector: HighlightSelector
+  url: string
+}
+
+/** The buttons of the in-page selection toolbar. */
+export type SelectionAction = 'highlight' | 'ask' | 'note'
+
+/** What the panel asks the content script to paint. */
+export interface PaintableHighlight {
+  id: string
+  selector: HighlightSelector | null
+  selectedText: string
+}
+
+export type SearchResultType = 'note' | 'message' | 'highlight'
+
+/** One hit from GET /search. */
+export interface SearchResult {
+  type: SearchResultType
+  id: string
+  /** Matched text, each hit wrapped in U+E000 … U+E001 (private-use
+   * characters, so ordinary text can never be mistaken for a marker). */
+  snippet: string
+  createdAt: string
+  /** Set for message hits, so the conversation can be reopened. */
+  conversationId: string | null
+  page: {
+    id: string
+    url: string
+    title: string | null
+    domain: string
   }
 }
 
@@ -45,6 +125,9 @@ export type PageContextStatus =
   | 'detecting'
   | 'ready'
   | 'signed-out'
+  /** Signed in, but the privacy explanation has not been acknowledged yet, so
+   * nothing about the page is sent. */
+  | 'consent-required'
   | 'unsupported'
   | 'error'
 
@@ -65,6 +148,16 @@ export type RuntimeMessage =
   | { type: 'GET_PAGE_SNAPSHOT' }
   /** Sent by the content script when a single-page app changes route. */
   | { type: 'PAGE_URL_CHANGED'; url: string }
+  /** Content script asking whether a side panel is watching its tab; only an
+   * open panel in the same window answers. */
+  | { type: 'PANEL_PING' }
+  /** A selection toolbar button was pressed (content script → side panel). */
+  | { type: 'SELECTION_ACTION'; action: SelectionAction; selection: CapturedSelection }
+  /** Side panel → content script: re-anchor and paint these highlights,
+   * replacing whatever was painted before. Answers with the ids not found. */
+  | { type: 'PAINT_HIGHLIGHTS'; highlights: PaintableHighlight[] }
+  /** Side panel → content script. */
+  | { type: 'SCROLL_TO_HIGHLIGHT'; id: string }
 
 /** Messages the background worker pushes down the side panel's port. */
 export type PanelMessage = { type: 'PAGE_CONTEXT'; context: PageContext }
@@ -82,6 +175,19 @@ export interface RuntimeResponse<T = unknown> {
 }
 
 export type WorkspaceTab = 'chat' | 'notes' | 'highlights' | 'history'
+
+/**
+ * A one-shot request for a tab to do something on arrival: prefill the
+ * composer from a selection, or open an item picked from history or search.
+ * Items carry their page id because picking a search result can switch pages;
+ * the intent waits until that page is the one being shown.
+ */
+export type PanelIntent =
+  | { kind: 'ask'; text: string }
+  | { kind: 'note'; sourceText: string }
+  | { kind: 'open-conversation'; pageId: string; conversationId: string }
+  | { kind: 'focus-note'; pageId: string; noteId: string }
+  | { kind: 'focus-highlight'; pageId: string; highlightId: string }
 
 /** The authenticated account, as returned by `GET /auth/me`. */
 export interface AuthUser {
@@ -120,6 +226,8 @@ export interface ChatMessage {
   conversationId: string
   role: MessageRole
   content: string
+  /** An answer cut short by a failure, a timeout or Stop. */
+  incomplete?: boolean
   createdAt: string
 }
 
@@ -132,7 +240,7 @@ export interface Conversation {
   updatedAt: string
 }
 
-export type AiProviderId = 'gemini' | 'openrouter'
+export type AiProviderId = 'gemini' | 'openrouter' | 'anthropic'
 
 /** One selectable answer provider, as reported by GET /ai/status. */
 export interface AiProviderSummary {

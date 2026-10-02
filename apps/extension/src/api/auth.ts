@@ -47,6 +47,11 @@ export function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser> {
   return apiFetch<AuthUser>("/auth/me", { signal });
 }
 
+/** DELETE /users/me — removes the account and everything saved under it. */
+export function deleteAccount(): Promise<void> {
+  return apiFetch<void>("/users/me", { method: "DELETE" });
+}
+
 export function loadStoredSession(): Promise<AuthSession | null> {
   return readStored<AuthSession>(STORAGE_KEYS.session);
 }

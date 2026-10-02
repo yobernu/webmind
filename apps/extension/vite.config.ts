@@ -15,8 +15,8 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        // Dev harness page, harmless inside the packaged extension.
-        index: entry('./index.html'),
+        // index.html is the dev harness: `vite` serves it directly, so it is
+        // left out of the packaged extension.
         sidepanel: entry('./sidepanel.html'),
         background: entry('./src/background/index.ts'),
       },

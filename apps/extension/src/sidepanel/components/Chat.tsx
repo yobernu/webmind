@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { AiProviderId, AiStage, AiStatus, PageContext } from "../../types";
+import type { AiProviderId, AiStage, AiStatus, PageContext, PanelIntent } from "../../types";
 import { useChat } from "../useChat";
 import KeyManager from "./KeyManager";
 import ModelPicker from "./ModelPicker";
@@ -23,11 +23,54 @@ function providerLabel(status: AiStatus, id: AiProviderId): string {
   return status.providers.find((provider) => provider.id === id)?.label ?? id;
 }
 
-export default function Chat({ context }: { context: PageContext }) {
+/** Keeps a quoted selection from crowding out the question itself. */
+const MAX_QUOTE_LENGTH = 1_200;
+
+/** The composer text for "Ask AI" on a selection. */
+function quoteForQuestion(text: string): string {
+  const quote =
+    text.length > MAX_QUOTE_LENGTH ? `${text.slice(0, MAX_QUOTE_LENGTH - 1)}…` : text;
+  return `“${quote}”\n\n`;
+}
+
+export default function Chat({
+  context,
+  intent,
+  onIntentHandled,
+}: {
+  context: PageContext;
+  intent: PanelIntent | null;
+  onIntentHandled: () => void;
+}) {
   const page = context.page;
   const chat = useChat(page?.id ?? null);
+  const { openConversation } = chat;
   const [draft, setDraft] = useState("");
   const threadRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // "Ask AI" on a selection, or a conversation picked from history or search.
+  useEffect(() => {
+    if (!intent || !page) return;
+
+    if (intent.kind === "ask") {
+      // Consuming a one-shot request from the parent, not deriving state.
+      // oxlint-disable-next-line react/set-state-in-effect
+      setDraft(quoteForQuestion(intent.text));
+      const composer = composerRef.current;
+      if (composer) {
+        composer.focus();
+        // Put the caret after the quote, where the question goes.
+        requestAnimationFrame(() =>
+          composer.setSelectionRange(composer.value.length, composer.value.length),
+        );
+      }
+      onIntentHandled();
+    } else if (intent.kind === "open-conversation" && intent.pageId === page.id) {
+      void openConversation(intent.conversationId);
+      onIntentHandled();
+    }
+  }, [intent, onIntentHandled, openConversation, page]);
   // Advanced only by the interval, never synchronously in the effect or during
   // render. A value left over from a previous question is older than the
   // current phase's start, so the clamp below shows nothing until the first
@@ -130,6 +173,9 @@ export default function Chat({ context }: { context: PageContext }) {
             data-role={message.role.toLowerCase()}
           >
             {message.content}
+            {message.incomplete && (
+              <span className="chat-incomplete">Answer stopped before it finished</span>
+            )}
           </div>
         ))}
 
@@ -183,6 +229,7 @@ export default function Chat({ context }: { context: PageContext }) {
 
       <form className="chat-composer" onSubmit={submit}>
         <textarea
+          ref={composerRef}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {

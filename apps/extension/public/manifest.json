@@ -3,10 +3,16 @@
   "name": "WebMind",
   "version": "0.1.0",
   "description": "Your persistent AI workspace for the web.",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArO+VivzE4LHad7RmIaAG/D3vteEPfVaPDXgsfqx0yvHKdy9kpXeiFauUB3RrlPYY3ADPq2NRRMn8xLakT7L4WuWTUX/IJPzs7IJe5/Nc4bnacrAUW59rgQ2ojmjl76rmzvWeE/nWRR9pIBK/mDD71OGPMEHc9uUL2/d6LAqpzpR75sbasfRHx262LoblGWnKvj8EcT/tbz61CsBKvDmpSwtqv3ZsACgpsyYHZH2DxShzfLk39Fo4ca9g7dSVCQSM2JzEPXHX+nWAgpQgsfvYKTshUgzF1tpabCkpUjbmsUBpnqffJRm4hnr/Xv4+FKubmVlnq8WLQ/NOqca5yQOnFQIDAQAB",
   "permissions": [
     "storage",
-    "activeTab",
     "scripting",
     "sidePanel",
     "identity"
@@ -22,7 +28,11 @@
     "default_path": "sidepanel.html"
   },
   "action": {
-    "default_title": "Open WebMind"
+    "default_title": "Open WebMind",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
   },
   "content_scripts": [
     {

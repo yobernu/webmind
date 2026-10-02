@@ -13,6 +13,8 @@ function describe(context: PageContext): string {
       return "WebMind cannot read this kind of page";
     case "signed-out":
       return "Sign in to save this page";
+    case "consent-required":
+      return "Nothing is sent until you have read how WebMind uses pages";
     case "error":
       return context.error ?? "Could not save this page";
     default:
