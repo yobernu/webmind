@@ -1,0 +1,182 @@
+/*
+ * Gloss AI design tokens.
+ *
+ * Editorial paper: warm off-white surfaces, ink text, one highlighter accent.
+ * Highlighter yellow is only ever a fill behind ink-coloured text; on paper it
+ * is about 1.2:1, so focus rings, selected states and primary buttons are ink.
+ *
+ * Light values live on :root and [data-theme="light"]; dark values apply with
+ * the system setting, or under [data-theme="dark"] (the gallery shows both).
+ */
+
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('../assets/fonts/newsreader-latin-opsz-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('../assets/fonts/newsreader-latin-opsz-italic.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  /* Surfaces */
+  --color-bg: #faf8f3;
+  --color-surface: #ffffff;
+  --color-sunken: #f2efe7;
+  --color-hover: rgba(28, 27, 25, 0.05);
+  --color-pressed: rgba(28, 27, 25, 0.09);
+
+  /* Text */
+  --color-text: #1c1b19;
+  --color-text-2: #55524b;
+  --color-text-3: #8a867c;
+
+  /* Lines */
+  --color-rule: #e4dfd3;
+  --color-rule-strong: #cfc8b8;
+
+  /* Accent: a fill, never a text or line colour on paper */
+  --color-highlight: #f5d547;
+  --color-highlight-wash: rgba(245, 213, 71, 0.42);
+  --color-highlight-strong: #e8bf1f;
+  --color-on-highlight: #1c1b19;
+
+  /* Actions */
+  --color-primary: #1c1b19;
+  --color-primary-hover: #34322e;
+  --color-on-primary: #faf8f3;
+  --color-focus: #1c1b19;
+
+  /* Status */
+  --color-danger: #b42318;
+  --color-danger-wash: rgba(180, 35, 24, 0.08);
+  --color-warning-wash: rgba(232, 191, 31, 0.16);
+  --color-success: #2e6b45;
+
+  --shadow-float: 0 1px 2px rgba(28, 27, 25, 0.06), 0 6px 20px rgba(28, 27, 25, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --color-bg: #191816;
+    --color-surface: #22211e;
+    --color-sunken: #121110;
+    --color-hover: rgba(237, 233, 224, 0.06);
+    --color-pressed: rgba(237, 233, 224, 0.1);
+
+    --color-text: #ede9e0;
+    --color-text-2: #b5b0a5;
+    --color-text-3: #7d786e;
+
+    --color-rule: #34322d;
+    --color-rule-strong: #4a4740;
+
+    --color-highlight: #e3c440;
+    --color-highlight-wash: rgba(227, 196, 64, 0.3);
+    --color-highlight-strong: #f0d35a;
+    --color-on-highlight: #1c1b19;
+
+    --color-primary: #ede9e0;
+    --color-primary-hover: #ffffff;
+    --color-on-primary: #191816;
+    --color-focus: #ede9e0;
+
+    --color-danger: #f0846f;
+    --color-danger-wash: rgba(240, 132, 111, 0.12);
+    --color-warning-wash: rgba(227, 196, 64, 0.14);
+    --color-success: #7cc496;
+
+    --shadow-float: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-bg: #191816;
+  --color-surface: #22211e;
+  --color-sunken: #121110;
+  --color-hover: rgba(237, 233, 224, 0.06);
+  --color-pressed: rgba(237, 233, 224, 0.1);
+
+  --color-text: #ede9e0;
+  --color-text-2: #b5b0a5;
+  --color-text-3: #7d786e;
+
+  --color-rule: #34322d;
+  --color-rule-strong: #4a4740;
+
+  --color-highlight: #e3c440;
+  --color-highlight-wash: rgba(227, 196, 64, 0.3);
+  --color-highlight-strong: #f0d35a;
+  --color-on-highlight: #1c1b19;
+
+  --color-primary: #ede9e0;
+  --color-primary-hover: #ffffff;
+  --color-on-primary: #191816;
+  --color-focus: #ede9e0;
+
+  --color-danger: #f0846f;
+  --color-danger-wash: rgba(240, 132, 111, 0.12);
+  --color-warning-wash: rgba(227, 196, 64, 0.14);
+  --color-success: #7cc496;
+
+  --shadow-float: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+:root {
+  /* Type */
+  --font-ui: system-ui, -apple-system, 'Segoe UI Variable Text', 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-serif: 'Newsreader', 'Iowan Old Style', 'Source Serif Pro', Georgia, serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.45;
+  --leading-prose: 1.6;
+
+  /* Space (4px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Shape */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration: 180ms;
+
+  /* Panel layout */
+  --gutter: 16px;
+}

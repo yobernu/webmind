@@ -1,49 +1,23 @@
+@import './ui/tokens.css';
+@import './ui/base.css';
+
+/*
+ * Temporary aliases so screens not yet moved to the design system keep
+ * rendering while they are redesigned one at a time. Removed once no `--wm-`
+ * reference remains.
+ */
 :root {
-  --wm-bg: #0e0b18;
-  --wm-bg-elevated: #171128;
-  --wm-surface: rgba(255, 255, 255, 0.045);
-  --wm-surface-hover: rgba(255, 255, 255, 0.08);
-  --wm-border: rgba(255, 255, 255, 0.09);
-  --wm-text: #f4f1ff;
-  --wm-text-muted: #a79dc4;
-  --wm-text-subtle: #6f6690;
-  --wm-brand: #863bff;
-  --wm-brand-strong: #7e14ff;
-  --wm-accent: #47bfff;
-  --wm-radius: 12px;
-  --wm-fade: 320ms;
-
-  color-scheme: dark;
-  font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  font-synthesis-weight: none;
-  -webkit-font-smoothing: antialiased;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-}
-
-body {
-  margin: 0;
-  color: var(--wm-text);
-  background: var(--wm-bg);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-button {
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-
-:focus-visible {
-  outline: 2px solid var(--wm-accent);
-  outline-offset: 2px;
+  --wm-bg: var(--color-bg);
+  --wm-bg-elevated: var(--color-surface);
+  --wm-surface: var(--color-sunken);
+  --wm-surface-hover: var(--color-hover);
+  --wm-border: var(--color-rule);
+  --wm-text: var(--color-text);
+  --wm-text-muted: var(--color-text-2);
+  --wm-text-subtle: var(--color-text-3);
+  --wm-brand: var(--color-primary);
+  --wm-brand-strong: var(--color-primary);
+  --wm-accent: var(--color-text);
+  --wm-radius: 8px;
+  --wm-fade: 200ms;
 }

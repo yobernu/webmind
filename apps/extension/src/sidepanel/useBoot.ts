@@ -5,8 +5,8 @@ import { delay, getActivePageSnapshot, isExtensionContext } from '../utils/page'
 /** Long enough that the splash does not flicker on a fast boot, short enough
  * that the panel still opens quickly (SRS §9.2). */
 const MIN_SPLASH_MS = 350
-/** Must match `--wm-fade` in index.css. */
-const FADE_MS = 320
+/** Must match the splash fade in Splash.css. */
+const FADE_MS = 200
 
 export interface BootState {
   phase: BootPhase
