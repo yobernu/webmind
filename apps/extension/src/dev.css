@@ -6,20 +6,19 @@
   gap: 12px;
   min-height: 100%;
   padding: 24px 16px;
-  background: #08060f;
+  background: #e6e1d6;
 }
 
 .dev-frame {
   width: 400px;
   height: 640px;
   overflow: hidden;
-  border: 1px solid var(--wm-border);
-  border-radius: 14px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--color-rule-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow-float);
 }
 
 .dev-note {
-  margin: 0;
-  font-size: 12px;
-  color: var(--wm-text-subtle);
+  font-size: var(--text-sm);
+  color: var(--color-text-3);
 }

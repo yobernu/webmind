@@ -19,10 +19,10 @@ import { isRestrictedUrl } from '../utils/url'
 // Clicking the toolbar icon opens the side panel (the manifest declares no popup).
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((error: unknown) => console.error('[WebMind] setPanelBehavior failed', error))
+  .catch((error: unknown) => console.error('[Gloss AI] setPanelBehavior failed', error))
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
-  console.log(`[WebMind] service worker installed (${reason})`)
+  console.log(`[Gloss AI] service worker installed (${reason})`)
 })
 
 /**
@@ -75,7 +75,7 @@ async function extractContent(tabId: number): Promise<ExtractedContent | null> {
   } catch (error) {
     // Injection is refused on the Chrome Web Store, PDFs and other special
     // pages. Metadata is still worth recording.
-    console.warn('[WebMind] content extraction unavailable', error)
+    console.warn('[Gloss AI] content extraction unavailable', error)
     return null
   }
 }
@@ -93,7 +93,7 @@ async function syncPage(snapshot: PageSnapshot, tabId: number): Promise<void> {
   }
 
   // No page URL, title or text leaves the browser before the user has read
-  // what WebMind does with them (SRS §9.4).
+  // what Gloss AI does with them (SRS §9.4).
   const acknowledged = await readStored<number>(STORAGE_KEYS.privacyAck).catch(() => null)
   if (stale()) return
   if ((acknowledged ?? 0) < PRIVACY_NOTICE_VERSION) {
@@ -148,7 +148,7 @@ async function syncPage(snapshot: PageSnapshot, tabId: number): Promise<void> {
       snapshot,
       page: null,
       error:
-        error instanceof ApiError ? error.message : 'Could not reach WebMind',
+        error instanceof ApiError ? error.message : 'Could not reach Gloss AI',
     })
   }
 }

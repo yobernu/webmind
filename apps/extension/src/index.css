@@ -1,24 +1,3 @@
 @import './ui/tokens.css';
 @import './ui/base.css';
 @import './ui/components.css';
-
-/*
- * Temporary aliases so screens not yet moved to the design system keep
- * rendering while they are redesigned one at a time. Removed once no `--wm-`
- * reference remains.
- */
-:root {
-  --wm-bg: var(--color-bg);
-  --wm-bg-elevated: var(--color-surface);
-  --wm-surface: var(--color-sunken);
-  --wm-surface-hover: var(--color-hover);
-  --wm-border: var(--color-rule);
-  --wm-text: var(--color-text);
-  --wm-text-muted: var(--color-text-2);
-  --wm-text-subtle: var(--color-text-3);
-  --wm-brand: var(--color-primary);
-  --wm-brand-strong: var(--color-primary);
-  --wm-accent: var(--color-text);
-  --wm-radius: 8px;
-  --wm-fade: 200ms;
-}

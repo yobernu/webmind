@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "WebMind",
+  "name": "Gloss AI",
+  "short_name": "Gloss",
   "version": "0.1.0",
-  "description": "Your persistent AI workspace for the web.",
+  "description": "Ask about the page you are reading, and keep your notes and highlights with it for when you come back.",
   "minimum_chrome_version": "116",
   "icons": {
     "16": "icons/icon-16.png",
@@ -28,7 +29,7 @@
     "default_path": "sidepanel.html"
   },
   "action": {
-    "default_title": "Open WebMind",
+    "default_title": "Open Gloss AI",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png"

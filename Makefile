@@ -1,4 +1,4 @@
-# WebMind developer commands.
+# Gloss AI developer commands.
 #
 # Run `make` on its own to see everything available.
 #
@@ -23,7 +23,7 @@ DOCKER_WAIT_TICKS := 90
 .PHONY: help docker up down restart ps logs psql db-reset migrate generate
 
 help: ## Show this help
-	@echo "WebMind make targets:"
+	@echo "Gloss AI make targets:"
 	@echo
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 	  | sort \
@@ -73,7 +73,7 @@ logs: ## Follow Postgres logs
 	@$(COMPOSE) logs -f $(SERVICE)
 
 # If Git Bash reports "the input device is not a TTY", run `winpty make psql`.
-psql: ## Open a psql shell on the WebMind database
+psql: ## Open a psql shell on the Gloss AI database
 	@$(COMPOSE) exec $(SERVICE) psql -U $(DB_USER) -d $(DB_NAME)
 
 db-reset: ## Delete the database volume and recreate it from migrations

@@ -10,7 +10,7 @@ export default defineConfig({
     lib: {
       entry: fileURLToPath(new URL('./src/content/index.ts', import.meta.url)),
       formats: ['iife'],
-      name: 'WebMindContent',
+      name: 'GlossContent',
       fileName: () => 'content.js',
     },
   },

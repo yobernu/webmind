@@ -1,12 +1,12 @@
-# WebMind privacy policy
+# Gloss AI privacy policy
 
-WebMind is a browser extension that keeps an AI workspace (chats, notes and highlights) attached to the web pages you read. This page explains what WebMind collects, where it goes and how to delete it.
+Gloss AI is a browser extension that keeps an AI workspace (chats, notes and highlights) attached to the web pages you read. This page explains what Gloss AI collects, where it goes and how to delete it.
 
-## When WebMind collects anything
+## When Gloss AI collects anything
 
-WebMind reads pages **only while its side panel is open**. Closing the panel stops all page tracking: nothing about the tabs you visit is read, recorded or sent.
+Gloss AI reads pages **only while its side panel is open**. Closing the panel stops all page tracking: nothing about the tabs you visit is read, recorded or sent.
 
-The first time you open the panel after signing in, WebMind explains what it collects. Nothing about any page is sent until you acknowledge that explanation.
+The first time you open the panel after signing in, Gloss AI explains what it collects. Nothing about any page is sent until you acknowledge that explanation.
 
 ## What is collected
 
@@ -19,15 +19,15 @@ The first time you open the panel after signing in, WebMind explains what it col
 | Notes, highlighted passages and where they sit in the page | When you save them | So they reappear when you come back |
 | API keys you choose to store for an AI provider | When you add one | To answer with your own provider account. Keys are encrypted at rest (AES-256-GCM) and never sent back to the browser. |
 
-WebMind does not collect browsing history beyond the pages you open the panel on. It does not read form fields, cookies or passwords from pages.
+Gloss AI does not collect browsing history beyond the pages you open the panel on. It does not read form fields, cookies or passwords from pages.
 
 ## Where data goes
 
-- **The WebMind server** stores the data above in a PostgreSQL database tied to your account. Other users cannot read it.
+- **The Gloss AI server** stores the data above in a PostgreSQL database tied to your account. Other users cannot read it.
 - **The AI provider you select** (Google Gemini, OpenRouter or Anthropic Claude) receives the relevant page text, your recent conversation and your question when you ask something. Its own terms and privacy policy apply to that request.
 - **Google's embedding service** receives the text of long pages, split into passages, so the most relevant passages can be found for a question.
 
-WebMind does not sell data and does not use it for advertising.
+Gloss AI does not sell data and does not use it for advertising.
 
 ## Security
 
@@ -38,10 +38,10 @@ WebMind does not sell data and does not use it for advertising.
 
 ## Deleting your data
 
-Open the side panel, choose **Privacy**, then **Delete my account**. This permanently deletes your account and everything stored with it: pages and their text, conversations, notes, highlights, embeddings and stored API keys.
+Open the side panel, choose your initials in the top corner, then **Settings**, and under **Account** choose **Delete account**. This permanently deletes your account and everything stored with it: pages and their text, conversations, notes, highlights, embeddings and stored API keys.
 
 You can also delete individual notes and highlights from the panel at any time.
 
 ## Contact
 
-For privacy questions, contact the WebMind team through the project's repository.
+For privacy questions, contact the Gloss AI team through the project's repository.

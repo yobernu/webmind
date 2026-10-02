@@ -26,7 +26,7 @@ export function login(credentials: Credentials): Promise<AuthSession> {
   });
 }
 
-/** POST /auth/google — trades a Google ID token for a WebMind session. */
+/** POST /auth/google — trades a Google ID token for a Gloss AI session. */
 export function loginWithGoogle(idToken: string): Promise<AuthSession> {
   return apiFetch<AuthSession>("/auth/google", {
     method: "POST",

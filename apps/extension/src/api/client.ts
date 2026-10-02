@@ -69,7 +69,7 @@ function describeError(status: number, payload: ErrorPayload | null): ApiError {
   return new ApiError(
     status,
     status >= 500
-      ? "The WebMind service is having trouble. Please try again in a moment."
+      ? "The Gloss AI service is having trouble. Please try again in a moment."
       : `The request was rejected (status ${status}).`,
     details,
   );
@@ -103,7 +103,7 @@ export async function* apiStream<T>(
     });
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
-    throw new ApiError(0, `Cannot reach the WebMind API at ${API_BASE_URL}`);
+    throw new ApiError(0, `Cannot reach the Gloss AI service at ${API_BASE_URL}`);
   }
 
   if (!response.ok) {
@@ -180,7 +180,7 @@ export async function apiFetch<T>(
     });
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === "AbortError") throw cause;
-    throw new ApiError(0, `Cannot reach the WebMind API at ${API_BASE_URL}`);
+    throw new ApiError(0, `Cannot reach the Gloss AI service at ${API_BASE_URL}`);
   }
 
   if (response.ok) {

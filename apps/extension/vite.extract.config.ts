@@ -11,7 +11,7 @@ export default defineConfig({
     lib: {
       entry: fileURLToPath(new URL('./src/extract/index.ts', import.meta.url)),
       formats: ['iife'],
-      name: 'WebMindExtract',
+      name: 'GlossExtract',
       fileName: () => 'extract.js',
     },
   },

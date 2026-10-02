@@ -1,32 +1,38 @@
-# React + TypeScript + Vite
+# Gloss AI — browser extension
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The Chrome (Manifest V3) side panel for Gloss AI: ask about the page you're reading, and keep notes and highlights attached to it.
 
-Currently, two official plugins are available:
+## Develop
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+pnpm install
+pnpm dev          # Vite dev server
+pnpm build        # side panel, background worker, content script and extractor into dist/
+pnpm test         # vitest (anchoring, prose parsing, quoting, helpers)
+pnpm typecheck
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Load `dist/` with **chrome://extensions → Developer mode → Load unpacked**. The manifest `key` pins the extension ID (`ibgogjgdimkikamkfdhimeelgdjpjibg`) so the API's CORS setting and the Google OAuth redirect stay valid across rebuilds.
+
+The API base URL comes from `VITE_API_BASE_URL` (see `.env.example`).
+
+## Component gallery
+
+With `pnpm dev` running, open **http://localhost:5173/gallery.html**. It renders every primitive and screen state from fixtures, in light and dark, at side-panel width; it is the reference for the design and is never packaged.
+
+- `?width=320` sets the frame width
+- `?only=primitives` or `?only=screens` limits what is shown, and `?screen=notes` filters screens by name
+- `?only=page` runs the real selection toolbar and highlight painter on a sample page
+
+## Layout
+
+| Path | Contents |
+| --- | --- |
+| `src/ui/` | Design system: tokens, base styles, primitives, icons, brand components |
+| `src/sidepanel/` | The panel: `App.tsx` orchestrates; screens in `components/`; data hooks (`useChat`, `useWorkspace`, `useAi`, `useSession`) |
+| `src/background/` | Service worker: tracks the active tab while the panel is open, resolves pages |
+| `src/content/` | Content script: selection toolbar and highlight painting (no React) |
+| `src/extract/` | Readability extractor, injected on demand |
+| `src/gallery/` | Dev-only component gallery |
+
+Brand assets and guidelines live in `project_docs/brand/`.
