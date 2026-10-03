@@ -31,11 +31,12 @@ const MIN_FIREFOX = '140.0'
 
 /**
  * What the add-on collects, shown to the user by Firefox at install
- * (see PRIVACY.md). Account email and password; the address and text of the
- * page open in the sidebar.
+ * (see PRIVACY.md): the Google account's email, name and picture, and the
+ * address and text of the page open in the sidebar. Sign-in is through
+ * Google, so the add-on never handles a password.
  */
 const DATA_COLLECTION = {
-  required: ['personallyIdentifyingInfo', 'authenticationInfo', 'browsingActivity', 'websiteContent'],
+  required: ['personallyIdentifyingInfo', 'browsingActivity', 'websiteContent'],
 }
 
 function fail(message) {

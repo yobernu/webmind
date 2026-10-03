@@ -15,7 +15,7 @@ You can also go to `about:debugging` → **This Firefox** → **Load Temporary A
 Then check:
 
 - The toolbar button and **Alt+Shift+G** open the sidebar.
-- You can sign in, read the privacy notice, ask a question and get a streamed answer.
+- **Continue with Google** signs you in (the Firefox redirect URI must be registered, see `project_docs/DEPLOY.md`), then the privacy notice appears; ask a question and get a streamed answer.
 - Selecting text shows the toolbar; Highlight marks the passage and survives a reload.
 - Notes, History search and Settings work.
 

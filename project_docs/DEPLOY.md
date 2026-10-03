@@ -34,7 +34,7 @@ You don't need to create anything in the database. The first deploy runs the mig
    | `GEMINI_API_KEY` | Optional. Enables Gemini answers and long-page search. |
    | `ANTHROPIC_API_KEY` | Optional. Enables Claude answers. |
    | `OPENROUTER_API_KEY` | Optional. |
-   | `GOOGLE_CLIENT_ID` | Optional. See step 4; leave empty for email-only sign-in. |
+   | `GOOGLE_CLIENT_ID` | **Required.** Sign-in is Google only; see step 3. |
 
    - Render generates `JWT_SECRET` and `CREDENTIAL_ENCRYPTION_KEY` itself. Never rotate the encryption key once users have stored API keys, or those keys become unreadable.
    - Without any AI key, people can still use Gloss by adding their own key in **Settings**.
@@ -55,9 +55,9 @@ You don't need to create anything in the database. The first deploy runs the mig
 - **Neon suspends** an idle database too, but resumes in well under a second.
 - **Migrations** run on every start. When nothing changed they finish immediately.
 
-## 3. Google sign-in (optional)
+## 3. Google sign-in (required)
 
-Email and password sign-in works without this.
+Gloss AI signs people in with Google only: the same button creates an account or signs in. Until this is set up, the sign-in screen says Google sign-in isn't available.
 
 1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth client of type **Web application**.
 2. Under **Authorized redirect URIs**, add one line per browser:

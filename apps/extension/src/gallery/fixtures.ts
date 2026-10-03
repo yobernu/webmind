@@ -135,6 +135,8 @@ export const SESSION: SessionState = {
   errorKind: null,
   pending: false,
   providers: { google: { enabled: true, clientId: "x", scopes: [] } },
+  providersState: "ready",
+  retryProviders: noop,
   signIn: async () => {},
   signUp: async () => {},
   signInWithGoogle: async () => {},

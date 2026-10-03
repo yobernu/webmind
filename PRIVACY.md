@@ -12,7 +12,7 @@ The first time you open the panel after signing in, Gloss AI explains what it co
 
 | Data | When | Why |
 | --- | --- | --- |
-| Email address and password (stored as a bcrypt hash), or your Google account's email, name and picture | At sign-up or sign-in | To identify your account |
+| Your Google account's email address, name and profile picture | When you continue with Google | To identify your account. Gloss AI never sees your Google password. |
 | The current page's address, title and domain | When the panel is open on that page | To attach your activity to the right page |
 | The page's readable text | When the panel is open on that page | So the AI can answer questions about it |
 | Your questions and the AI's answers | When you ask | So conversations persist and can be reopened |

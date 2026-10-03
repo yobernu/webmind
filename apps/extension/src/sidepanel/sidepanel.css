@@ -793,69 +793,122 @@
 
 /* --- Auth ---------------------------------------------------------------- */
 
+/* One centred column; the footnote sits at the bottom of the panel. */
 .auth {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-6) var(--gutter) var(--space-8);
+  align-items: center;
+  min-height: 100%;
+  padding: var(--space-8) var(--gutter) var(--space-5);
+  text-align: center;
 }
 
-.auth-intro {
+.auth-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 296px;
+  margin: auto 0;
+}
+
+.auth-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--space-3);
 }
 
 .auth-title {
   font-family: var(--font-serif);
   font-size: var(--text-2xl);
   font-weight: 500;
-  line-height: var(--leading-tight);
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+/* The brand's highlighter, drawn as a band under the words. */
+.auth-title-mark {
+  background: linear-gradient(
+    transparent 62%,
+    var(--color-highlight) 62%,
+    var(--color-highlight) 90%,
+    transparent 90%
+  );
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 .auth-lede {
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
   color: var(--color-text-2);
   text-wrap: pretty;
 }
 
-.auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.auth-google {
-  width: 100%;
-}
-
-.auth-divider {
-  display: flex;
+/* Google's sign-in button, per its branding guidelines: its own colours in
+ * each theme, the four-colour mark on the left, a 40px rectangle. */
+.google-btn {
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
+  width: 100%;
+  height: 40px;
+  margin-top: var(--space-3);
+  padding: 0 12px;
+  border: 1px solid var(--google-border);
+  border-radius: var(--radius-sm);
+  background: var(--google-bg);
+  color: var(--google-text);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition:
+    box-shadow var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.google-btn:hover:not(:disabled) {
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+}
+
+.google-btn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--google-bg) 92%, var(--google-text));
+}
+
+.google-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.google-btn[aria-busy='true'] {
+  opacity: 1;
+}
+
+.auth-hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-3);
+}
+
+.auth-card .alert {
+  width: 100%;
+  text-align: left;
+}
+
+.auth-foot {
+  margin-top: var(--space-6);
   font-size: var(--text-xs);
   color: var(--color-text-3);
 }
 
-.auth-divider::before,
-.auth-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--color-rule);
-}
-
-.auth-submit {
-  width: 100%;
-  margin-top: 4px;
-}
-
-.auth-switch {
-  font-size: var(--text-md);
-  color: var(--color-text-2);
-}
-
 .auth-dev {
+  align-self: stretch;
+  margin-top: var(--space-3);
   padding-top: var(--space-3);
+  text-align: left;
   border-top: 1px dashed var(--color-rule);
   font-family: var(--font-mono);
   font-size: var(--text-xs);

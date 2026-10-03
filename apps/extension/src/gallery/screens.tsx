@@ -170,10 +170,42 @@ export const screens: { name: string; render: () => ReactNode }[] = [
     ),
   },
   {
+    name: "Sign in · signing in",
+    render: () => (
+      <div className="panel-body">
+        <AuthPanel session={{ ...SESSION, pending: true }} />
+      </div>
+    ),
+  },
+  {
+    name: "Sign in · connecting",
+    render: () => (
+      <div className="panel-body">
+        <AuthPanel session={{ ...SESSION, providersState: "loading" }} />
+      </div>
+    ),
+  },
+  {
+    name: "Sign in · unreachable",
+    render: () => (
+      <div className="panel-body">
+        <AuthPanel session={{ ...SESSION, providersState: "unreachable" }} />
+      </div>
+    ),
+  },
+  {
+    name: "Sign in · not configured",
+    render: () => (
+      <div className="panel-body">
+        <AuthPanel session={{ ...SESSION, providers: { google: { enabled: false, clientId: null, scopes: [] } } }} />
+      </div>
+    ),
+  },
+  {
     name: "Sign in · error",
     render: () => (
       <div className="panel-body">
-        <AuthPanel session={{ ...SESSION, error: "Invalid email or password", errorKind: "credentials" }} />
+        <AuthPanel session={{ ...SESSION, error: "Google sign-in could not finish. Please try again.", errorKind: "provider" }} />
       </div>
     ),
   },

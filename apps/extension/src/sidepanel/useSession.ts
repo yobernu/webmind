@@ -30,6 +30,8 @@ export type AuthErrorKind =
   | "unknown";
 
 /** Assumed until `GET /auth/providers` answers, so no button flashes in. */
+export type ProvidersState = "loading" | "ready" | "unreachable";
+
 const NO_PROVIDERS: AuthProviders = {
   google: { enabled: false, clientId: null, scopes: [] },
 };
@@ -44,6 +46,10 @@ export interface SessionState {
   pending: boolean;
   /** Sign-in options the API reports; drives which buttons are shown. */
   providers: AuthProviders;
+  /** Whether those options have arrived, or the API could not be reached. */
+  providersState: ProvidersState;
+  /** Asks the API for its sign-in options again, after it was unreachable. */
+  retryProviders: () => void;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -62,6 +68,25 @@ export function useSession(): SessionState {
   const [errorKind, setErrorKind] = useState<AuthErrorKind | null>(null);
   const [pending, setPending] = useState(false);
   const [providers, setProviders] = useState<AuthProviders>(NO_PROVIDERS);
+  const [providersState, setProvidersState] = useState<ProvidersState>("loading");
+
+  /** Fetches the sign-in options. A free-tier API can take a minute to wake,
+   * so the sign-in screen shows straight away and waits on this instead. */
+  const loadProviders = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const config = await fetchAuthProviders(signal);
+      if (signal?.aborted) return;
+      setProviders(config);
+      setProvidersState("ready");
+    } catch {
+      if (!signal?.aborted) setProvidersState("unreachable");
+    }
+  }, []);
+
+  const retryProviders = useCallback(() => {
+    setProvidersState("loading");
+    void loadProviders();
+  }, [loadProviders]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -70,18 +95,11 @@ export function useSession(): SessionState {
     const restore = async () => {
       // Which providers exist is independent of whether this user is signed in,
       // so it is fetched alongside rather than after the session check.
-      const providerConfig = fetchAuthProviders(controller.signal)
-        .then((config) => {
-          if (!cancelled) setProviders(config);
-        })
-        .catch(() => {
-          // An unreachable API simply means no provider buttons.
-        });
+      void loadProviders(controller.signal);
 
       const stored = await loadStoredSession().catch(() => null);
 
       if (!stored?.accessToken) {
-        await providerConfig;
         if (!cancelled) setStatus("signed-out");
         return;
       }
@@ -113,9 +131,6 @@ export function useSession(): SessionState {
         }
 
         await clearStoredSession();
-        // Wait for the provider list so the form renders complete, rather than
-        // popping the Google button in a moment later.
-        await providerConfig;
         if (!cancelled) setStatus("signed-out");
       }
     };
@@ -125,7 +140,7 @@ export function useSession(): SessionState {
       cancelled = true;
       controller.abort();
     };
-  }, []);
+  }, [loadProviders]);
 
   /** Shared tail of every sign-in route: store the session, or explain why not. */
   const authenticate = useCallback(
@@ -219,6 +234,8 @@ export function useSession(): SessionState {
     errorKind,
     pending,
     providers,
+    providersState,
+    retryProviders,
     signIn,
     signUp,
     signInWithGoogle,

@@ -68,6 +68,11 @@
   --color-success: #2e6b45;
 
   --shadow-float: 0 1px 2px rgba(28, 27, 25, 0.06), 0 6px 20px rgba(28, 27, 25, 0.1);
+
+  /* Google's sign-in button colours, from its branding guidelines. */
+  --google-bg: #ffffff;
+  --google-border: #747775;
+  --google-text: #1f1f1f;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -103,6 +108,10 @@
     --color-success: #7cc496;
 
     --shadow-float: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+
+    --google-bg: #131314;
+    --google-border: #8e918f;
+    --google-text: #e3e3e3;
   }
 }
 
@@ -138,6 +147,10 @@
   --color-success: #7cc496;
 
   --shadow-float: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  --google-bg: #131314;
+  --google-border: #8e918f;
+  --google-text: #e3e3e3;
 }
 
 :root {

@@ -69,7 +69,7 @@ They're composed from the real components by the gallery: `pnpm dev`, then open 
 
 Paste this into the "Notes to reviewer" field:
 
-> Gloss AI needs an account on our API, and anyone can create one in the sidebar with an email and password. No invite or test account is required.
+> Sign-in is with Google only: click "Continue with Google" in the sidebar and any Google account works. The same button creates the account, so no invite or test account is required.
 >
 > The API runs on a free hosting tier that sleeps when idle, so the first request after a pause can take up to a minute.
 >

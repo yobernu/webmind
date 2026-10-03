@@ -41,10 +41,13 @@ services:
       - key: ALLOW_FIREFOX_EXTENSIONS
         value: "true"
 
-      # Optional: Google sign-in, and server-side AI keys. Without any AI key,
-      # users can still bring their own from Settings.
+      # Required: sign-in is Google only. The OAuth client must list both
+      # browsers' redirect URIs (see project_docs/DEPLOY.md).
       - key: GOOGLE_CLIENT_ID
         sync: false
+
+      # Optional server-side AI keys. Without any, users can still bring
+      # their own from Settings.
       - key: GEMINI_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
