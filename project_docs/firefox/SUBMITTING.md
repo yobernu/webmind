@@ -1,0 +1,54 @@
+# Publishing Gloss AI on Firefox Add-ons
+
+Publishing on addons.mozilla.org (AMO) is free. You need the API running first (`project_docs/DEPLOY.md`), because reviewers will try the add-on.
+
+## 1. Try it in Firefox
+
+```sh
+cd apps/extension
+pnpm build:firefox
+pnpm start:firefox     # opens a temporary Firefox profile with Gloss AI loaded
+```
+
+You can also go to `about:debugging` → **This Firefox** → **Load Temporary Add-on…** and pick `dist-firefox/manifest.json`.
+
+Then check:
+
+- The toolbar button and **Alt+Shift+G** open the sidebar.
+- You can sign in, read the privacy notice, ask a question and get a streamed answer.
+- Selecting text shows the toolbar; Highlight marks the passage and survives a reload.
+- Notes, History search and Settings work.
+
+## 2. Build the upload
+
+```sh
+pnpm package:firefox
+```
+
+This refuses to build against `localhost`, lints the add-on with Mozilla's own validator and writes two files to `web-ext-artifacts/`:
+
+- `gloss_ai-0.1.0.zip`: the add-on to upload.
+- `gloss_ai-0.1.0-source.zip`: the source, for the reviewer. Commit your changes first so the archive matches the build.
+
+The validator reports **0 errors**. The warnings it shows are explained in `apps/extension/AMO_REVIEW.md`.
+
+## 3. Submit
+
+1. Sign in at [addons.mozilla.org/developers](https://addons.mozilla.org/developers/) with a Firefox account. AMO asks you to turn on two-step authentication before your first submission.
+2. Choose **Submit a New Add-on** → **On this site**. This is a listed add-on: AMO hosts it, signs it and delivers updates.
+3. Upload `gloss_ai-0.1.0.zip`. For platforms, select **Firefox** (desktop) only, because Android has no sidebar.
+4. When asked whether you use a compiler, minifier or bundler, answer **Yes** and upload `gloss_ai-0.1.0-source.zip`.
+5. Fill in the listing from `project_docs/firefox/LISTING.md`: name, summary, description, categories, support details, privacy policy, screenshots and reviewer notes.
+6. Submit.
+
+The add-on ID `gloss-ai@yobernu.dev` is now permanent. Every future version must keep it, and it's written into `scripts/firefox.mjs`.
+
+## 4. After submitting
+
+- **Automated validation** runs at once. A listed add-on is usually public within minutes to a day, and human review can follow later.
+- **If a reviewer asks for changes,** reply in the developer hub, rebuild and upload a new version.
+- **Updates:** raise `version` in `public/manifest.json`, run `pnpm package:firefox`, then go to the developer hub → Gloss AI → **Upload New Version**. Installed copies update automatically.
+
+## Chrome Web Store, later
+
+The same codebase builds for Chrome (`pnpm build` → `dist/`). The Chrome Web Store charges a one-time $5 registration fee. Zip `dist/` and upload it; the manifest `key` keeps the extension ID that the API's CORS setting and Google sign-in expect.
