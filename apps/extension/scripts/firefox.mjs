@@ -132,7 +132,9 @@ function sourceArchive() {
   const { version } = JSON.parse(readFileSync(`${root}public/manifest.json`, 'utf8'))
   mkdirSync(artifacts, { recursive: true })
   const file = `${artifacts}/gloss_ai-${version}-source.zip`
-  execFileSync('git', ['archive', '--format=zip', `--output=${file}`, '--prefix=gloss-ai-extension/', 'HEAD:apps/extension'], {
+  // Run from the extension directory, git archive includes only that
+  // directory, with paths relative to it.
+  execFileSync('git', ['archive', '--format=zip', `--output=${file}`, '--prefix=gloss-ai-extension/', 'HEAD'], {
     cwd: root,
   })
   console.log(`✔ ${file.replace(root, '')}`)
