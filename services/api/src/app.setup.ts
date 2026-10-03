@@ -6,13 +6,18 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 
 /**
  * The API is consumed by the browser extension, whose pages have a
- * `chrome-extension://<id>` origin, and by the Vite dev harness on localhost.
- * Auth uses the Authorization header rather than cookies, so credentials are
- * not enabled.
+ * `chrome-extension://<id>` origin in Chrome and `moz-extension://<uuid>` in
+ * Firefox, and by the Vite dev harness on localhost. Auth uses the
+ * Authorization header rather than cookies, so credentials are not enabled.
  *
  * Precedence: an explicit CORS_ALLOWED_ORIGINS list; otherwise the Gloss AI
- * extension (EXTENSION_ID) plus localhost outside production; otherwise, in
- * development only, any extension.
+ * Chrome extension (EXTENSION_ID), Firefox extensions when
+ * ALLOW_FIREFOX_EXTENSIONS is "true", and localhost outside production;
+ * otherwise, in development only, any extension.
+ *
+ * Firefox gives every installation its own random UUID, so its origin cannot
+ * be pinned the way Chrome's can. That is acceptable because CORS is not the
+ * security boundary here: every request still needs the user's bearer token.
  */
 export function isAllowedOrigin(origin: string): boolean {
   const configured = process.env.CORS_ALLOWED_ORIGINS?.split(',')
@@ -27,11 +32,14 @@ export function isAllowedOrigin(origin: string): boolean {
   const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(
     origin,
   );
+  const isFirefoxExtension = /^moz-extension:\/\/[0-9a-f-]{36}$/i.test(origin);
+  const allowFirefox = process.env.ALLOW_FIREFOX_EXTENSIONS === 'true';
   const extensionId = process.env.EXTENSION_ID?.trim();
 
-  if (extensionId) {
+  if (extensionId || allowFirefox) {
     return (
-      origin === `chrome-extension://${extensionId}` ||
+      (Boolean(extensionId) && origin === `chrome-extension://${extensionId}`) ||
+      (allowFirefox && isFirefoxExtension) ||
       (!production && isLocalhost)
     );
   }
@@ -39,7 +47,8 @@ export function isAllowedOrigin(origin: string): boolean {
   // Without a pinned id any installed extension could call the API with a
   // stolen token, which is tolerable on a laptop and nowhere else.
   return (
-    !production && (origin.startsWith('chrome-extension://') || isLocalhost)
+    !production &&
+    (origin.startsWith('chrome-extension://') || isFirefoxExtension || isLocalhost)
   );
 }
 

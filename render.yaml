@@ -1,0 +1,55 @@
+# Render Blueprint for the Gloss AI API.
+# New → Blueprint in the Render dashboard, point it at this repository, and
+# fill in the values marked `sync: false` when prompted. See
+# project_docs/DEPLOY.md for the whole walkthrough, including Neon Postgres.
+
+services:
+  - type: web
+    name: gloss-ai-api
+    runtime: node
+    plan: free
+    # Closest Render region to East Africa; change to suit your users.
+    region: frankfurt
+    rootDir: services/api
+    # NODE_ENV stays unset during the build so dev dependencies (Nest CLI,
+    # Prisma CLI) are installed; production mode is set at start.
+    buildCommand: npm install -g pnpm@10.33.0 && pnpm install --frozen-lockfile && pnpm exec prisma generate && pnpm build
+    # Migrations run on every start; `prisma migrate deploy` is a no-op when
+    # the database is already up to date. (Render's pre-deploy command is not
+    # available on the free plan.)
+    startCommand: pnpm exec prisma migrate deploy && NODE_ENV=production node dist/main
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+
+      # Neon's *direct* (non-pooled) connection string, with sslmode=require.
+      - key: DATABASE_URL
+        sync: false
+
+      # Render generates these once: 256-bit, base64. Rotating
+      # CREDENTIAL_ENCRYPTION_KEY makes stored user API keys unreadable.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        generateValue: true
+
+      # CORS: the Chrome extension's pinned id, and Firefox installs (whose
+      # origins are random per install, so they cannot be pinned).
+      - key: EXTENSION_ID
+        value: ibgogjgdimkikamkfdhimeelgdjpjibg
+      - key: ALLOW_FIREFOX_EXTENSIONS
+        value: "true"
+
+      # Optional: Google sign-in, and server-side AI keys. Without any AI key,
+      # users can still bring their own from Settings.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_SITE_NAME
+        value: Gloss AI

@@ -129,6 +129,10 @@ describe.skipIf(!hasDatabase)('Gloss AI API (e2e)', () => {
     await app?.close();
   });
 
+  it('answers the public health check with a database round trip', async () => {
+    await http.get('/health').expect(200, { status: 'ok' });
+  });
+
   describe('authentication (FR-01)', () => {
     it('logs in with the password used at sign-up', async () => {
       // Nest's POST default; the extension only checks for success.

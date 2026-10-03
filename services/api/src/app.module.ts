@@ -9,6 +9,7 @@ import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor.js';
+import { HealthController } from './health/health.controller.js';
 import { PagesModule } from './pages/pages.module.js';
 import { AiModule } from './ai/ai.module.js';
 import { ConversationsModule } from './conversations/conversations.module.js';
@@ -48,6 +49,7 @@ import { SearchModule } from './search/search.module.js';
     HighlightsModule,
     SearchModule,
   ],
+  controllers: [HealthController],
   providers: [
     // Every route requires a valid token unless marked @Public().
     { provide: APP_GUARD, useClass: JwtAuthGuard },
