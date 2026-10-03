@@ -9,7 +9,11 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "build:firefox": "pnpm build && node scripts/firefox.mjs manifest",
+    "lint:firefox": "web-ext lint --source-dir dist-firefox",
+    "start:firefox": "web-ext run --source-dir dist-firefox --start-url https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch",
+    "package:firefox": "node scripts/firefox.mjs check-api && pnpm build:firefox && web-ext lint --source-dir dist-firefox && web-ext build --source-dir dist-firefox --artifacts-dir web-ext-artifacts --filename gloss_ai-{version}.zip --overwrite-dest && node scripts/firefox.mjs source"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "^5.3.0",
