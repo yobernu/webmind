@@ -69,8 +69,10 @@ Gloss AI signs people in with Google only: the same button creates an account or
 1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth client of type **Web application**.
 2. Under **Authorized redirect URIs**, add one line per browser:
    - **Chrome:** `https://ibgogjgdimkikamkfdhimeelgdjpjibg.chromiumapp.org/`
-   - **Firefox:** run the extension, open `about:debugging` → **This Firefox** → Gloss AI → **Inspect**, and run `browser.identity.getRedirectURL()` in the console. It returns an `https://….extensions.allizom.org/` address that depends only on the add-on ID, so it never changes.
-3. Set the OAuth consent screen's app name to **Gloss AI**.
+   - **Firefox:** `https://68d2408aba0214be149dec31307a1794d0f4812f.extensions.allizom.org/`
+
+     Firefox derives this from the SHA-1 of the add-on ID (`gloss-ai@yobernu.dev`), so it never changes. To check it: in the Firefox window that `pnpm start:firefox` opens (not your everyday Firefox), go to `about:debugging#/runtime/this-firefox` → Gloss AI → **Inspect**, and run `browser.identity.getRedirectURL()` in the console.
+3. Set the OAuth consent screen's app name to **Gloss AI**, then **publish the app** (Audience → Publishing status → *In production*). In *Testing* status only listed test users can sign in, which would lock out everyone else, including AMO's reviewers. Gloss asks only for `openid`, `email` and `profile`, which need no Google verification.
 4. Put the client ID in Render's `GOOGLE_CLIENT_ID` and redeploy.
 
 ## 4. Point the extension at it
