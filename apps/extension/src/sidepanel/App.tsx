@@ -61,11 +61,14 @@ function withoutHash(url: string | undefined): string {
 /** What was painted, and for which tab load and highlight set. */
 interface PaintState {
   missing: ReadonlySet<string>;
+  /** False when the browser can't paint highlights at all (no CSS Custom
+   * Highlight API), as opposed to individual passages not being found. */
+  supported: boolean;
   key: number | null;
   highlights: Highlight[] | null;
 }
 
-const NOTHING_PAINTED: PaintState = { missing: new Set(), key: null, highlights: null };
+const NOTHING_PAINTED: PaintState = { missing: new Set(), supported: true, key: null, highlights: null };
 
 export default function App() {
   const session = useSession();
@@ -151,7 +154,7 @@ export default function App() {
     const highlights = workspace.highlights;
     let cancelled = false;
 
-    void sendToActiveTab<{ missing: string[] }>({
+    void sendToActiveTab<{ missing: string[]; supported?: boolean }>({
       type: "PAINT_HIGHLIGHTS",
       highlights: highlights.map(({ id, selector, selectedText }) => ({
         id,
@@ -163,6 +166,7 @@ export default function App() {
       setPaint({
         // No reply means the page could not be scripted at all.
         missing: new Set(reply?.ok ? (reply.data?.missing ?? []) : highlights.map((h) => h.id)),
+        supported: reply?.data?.supported ?? true,
         key: paintKey,
         highlights,
       });
@@ -322,6 +326,7 @@ export default function App() {
         context={pageContext}
         workspace={workspace}
         missingIds={paint.missing}
+        paintSupported={paint.supported}
         painted={painted}
         intent={intent}
         onIntentHandled={clearIntent}

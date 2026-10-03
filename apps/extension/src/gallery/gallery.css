@@ -79,3 +79,80 @@
 .page-preview p + p {
   margin-top: 14px;
 }
+
+/* --- Store listing screenshots (1280×800) --------------------------------- */
+
+.store {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  align-items: center;
+  gap: 48px;
+  width: 1280px;
+  height: 800px;
+  padding: 0 64px;
+  overflow: hidden;
+  background: #ede8dc;
+  color: #1c1b19;
+}
+
+.store-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.store-headline {
+  font-family: var(--font-serif);
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.store-body {
+  font-size: 17px;
+  line-height: 1.55;
+  color: #55524b;
+  text-wrap: pretty;
+}
+
+.store-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.store-stage[data-page] {
+  justify-content: flex-end;
+}
+
+.store-page {
+  position: absolute;
+  top: 120px;
+  left: -36px;
+  transform: scale(0.92);
+  transform-origin: top left;
+  filter: drop-shadow(0 12px 32px rgba(28, 27, 25, 0.12));
+}
+
+.store-page .page-preview {
+  width: 460px;
+  padding-bottom: 72px;
+}
+
+.store-panel {
+  position: relative;
+  width: 380px;
+  overflow: hidden;
+  border: 1px solid rgba(28, 27, 25, 0.14);
+  border-radius: 12px;
+  background: var(--color-bg);
+  box-shadow: 0 2px 4px rgba(28, 27, 25, 0.06), 0 24px 64px rgba(28, 27, 25, 0.18);
+}
+
+.store-panel .gallery-screen {
+  height: 700px;
+}

@@ -4,7 +4,7 @@ import { MARK } from '../ui/brand/paths'
 // Icons from the panel's set (src/ui/Icon.tsx), as strings: the content
 // script is plain TS and stays free of React.
 const ICON_ATTRS =
-  'width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"'
+  'xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"'
 
 const ICONS: Record<SelectionAction, string> = {
   highlight: `<svg ${ICON_ATTRS}><path d="M9.6 2.6 13.4 6.4 8.15 11.65 4.35 7.85z"/><path d="M4.35 7.85 2.75 12.5l1.25.75 4.15-1.6"/><path d="M9.75 13.25h3.5"/></svg>`,
@@ -18,7 +18,7 @@ const ACTIONS: { action: SelectionAction; label: string }[] = [
   { action: 'note', label: 'Note' },
 ]
 
-const MARK_SVG = `<svg width="18" height="18" viewBox="${MARK.viewBox}" aria-hidden="true"><rect x="${MARK.swipe.x}" y="${MARK.swipe.y}" width="${MARK.swipe.w}" height="${MARK.swipe.h}" transform="rotate(-6 ${MARK.swipe.cx} ${MARK.swipe.cy})" fill="#F5D547"/><path fill="currentColor" transform="${MARK.glyph.transform}" d="${MARK.glyph.d}"/></svg>`
+const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="${MARK.viewBox}" aria-hidden="true"><rect x="${MARK.swipe.x}" y="${MARK.swipe.y}" width="${MARK.swipe.w}" height="${MARK.swipe.h}" transform="rotate(-6 ${MARK.swipe.cx} ${MARK.swipe.cy})" fill="#F5D547"/><path fill="currentColor" transform="${MARK.glyph.transform}" d="${MARK.glyph.d}"/></svg>`
 
 // A closed shadow root: the page's CSS and scripts can't restyle or read it,
 // and its styles can't leak out. @font-face is ignored inside shadow roots,
@@ -80,6 +80,13 @@ const STYLE = `
   }
 `
 
+/** Parses one of the static SVG strings above into a node. Only constants
+ * from this file are ever parsed; nothing from the page is. */
+function svgNode(markup: string): Node {
+  const parsed = new DOMParser().parseFromString(markup, 'image/svg+xml').documentElement
+  return document.importNode(parsed, true)
+}
+
 export interface SelectionToolbar {
   /** Shows the toolbar under a selection's bounding box (viewport coordinates). */
   show(rect: DOMRect): void
@@ -102,14 +109,15 @@ export function createSelectionToolbar(onAction: (action: SelectionAction) => vo
 
   const mark = document.createElement('span')
   mark.className = 'mark'
-  mark.innerHTML = MARK_SVG
+  mark.append(svgNode(MARK_SVG))
   bar.append(mark)
 
   for (const { action, label } of ACTIONS) {
     const button = document.createElement('button')
     button.type = 'button'
-    // Static markup from this file only; nothing from the page is inserted.
-    button.innerHTML = `${ICONS[action]}<span>${label}</span>`
+    const text = document.createElement('span')
+    text.textContent = label
+    button.append(svgNode(ICONS[action]), text)
     button.addEventListener('click', (event) => {
       event.preventDefault()
       event.stopPropagation()

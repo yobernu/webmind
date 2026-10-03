@@ -16,10 +16,27 @@ import { readStored } from '../utils/storage'
 import { snapshotTab } from '../utils/page'
 import { isRestrictedUrl } from '../utils/url'
 
-// Clicking the toolbar icon opens the side panel (the manifest declares no popup).
-chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((error: unknown) => console.error('[Gloss AI] setPanelBehavior failed', error))
+/** Firefox's sidebar API. Chrome has none, and @types/chrome omits it. */
+interface SidebarAction {
+  toggle(): Promise<void>
+}
+
+const sidebarAction = (globalThis as { browser?: { sidebarAction?: SidebarAction } }).browser
+  ?.sidebarAction
+
+// Clicking the toolbar icon opens the panel (the manifest declares no popup).
+if (chrome.sidePanel?.setPanelBehavior) {
+  // Chrome: the side panel opens itself on a toolbar click.
+  chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch((error: unknown) => console.error('[Gloss AI] setPanelBehavior failed', error))
+} else if (sidebarAction) {
+  // Firefox has no side panel API; the same panel runs as its sidebar. toggle()
+  // needs the user's gesture, so it is called synchronously in the handler.
+  chrome.action.onClicked.addListener(() => {
+    sidebarAction.toggle().catch((error: unknown) => console.error('[Gloss AI] sidebar toggle failed', error))
+  })
+}
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   console.log(`[Gloss AI] service worker installed (${reason})`)

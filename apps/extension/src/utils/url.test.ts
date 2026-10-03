@@ -15,6 +15,9 @@ describe('url helpers', () => {
       'file:///home/me/notes.txt',
       'view-source:https://example.com',
       'https://chromewebstore.google.com/detail/x',
+      'moz-extension://3f1c/sidepanel.html',
+      'https://addons.mozilla.org/en-US/firefox/addon/x/',
+      'resource://pdf.js/web/viewer.html',
       '',
     ]) {
       expect(isRestrictedUrl(url), url).toBe(true)

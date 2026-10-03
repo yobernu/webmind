@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import PanelHeader from "../sidepanel/components/PanelHeader";
 import type { PageContext } from "../types";
 import { Tabs } from "../ui";
-import { noop, READY, USER } from "./fixtures";
+import { noop, READY, USER, WORKSPACE } from "./fixtures";
 
 /** Header, tabs and body, as the panel composes them. */
 export default function GalleryWorkspace({ tab = "chat", children, context = READY }: { tab?: string; children: ReactNode; context?: PageContext }) {
@@ -16,8 +16,8 @@ export default function GalleryWorkspace({ tab = "chat", children, context = REA
         onSelect={noop}
         items={[
           { id: "chat", label: "Ask" },
-          { id: "notes", label: "Notes", count: 3 },
-          { id: "highlights", label: "Highlights", count: 12 },
+          { id: "notes", label: "Notes", count: WORKSPACE.counts.notes },
+          { id: "highlights", label: "Highlights", count: WORKSPACE.counts.highlights },
           { id: "history", label: "History" },
         ]}
       />

@@ -75,6 +75,7 @@ export default function Highlights({
   context,
   workspace,
   missingIds,
+  paintSupported = true,
   painted,
   intent,
   onIntentHandled,
@@ -84,6 +85,8 @@ export default function Highlights({
   workspace: WorkspaceState;
   /** Highlights the content script could not re-anchor on the live page. */
   missingIds: ReadonlySet<string>;
+  /** False when this browser can't mark passages on the page at all. */
+  paintSupported?: boolean;
   /** Whether the latest set has been painted, so scrolling can find it. */
   painted: boolean;
   intent: PanelIntent | null;
@@ -138,6 +141,9 @@ export default function Highlights({
         </EmptyState>
       ) : (
         <>
+          {!paintSupported && (
+            <p className="list-status">This browser can’t mark highlights on the page; they’re kept here.</p>
+          )}
           {missingCount > 0 && (
             <p className="list-status">
               {missingCount === 1

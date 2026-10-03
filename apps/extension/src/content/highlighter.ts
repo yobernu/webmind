@@ -13,7 +13,7 @@ const STYLE_ID = 'gloss-highlight-style'
  */
 const painted = new Map<string, Range>()
 
-function supported(): boolean {
+export function paintingSupported(): boolean {
   return typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight === 'function'
 }
 
@@ -51,7 +51,7 @@ function locate(item: PaintableHighlight, index: TextIndex): Range | null {
  * be found on the page as it is now. */
 export function paintHighlights(items: PaintableHighlight[]): string[] {
   painted.clear()
-  if (!supported()) return items.map((item) => item.id)
+  if (!paintingSupported()) return []
 
   CSS.highlights.delete(HIGHLIGHT_NAME)
   if (items.length === 0) return []
@@ -84,7 +84,7 @@ export function scrollToHighlight(id: string): boolean {
       : range.startContainer.parentElement
   element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 
-  if (supported()) {
+  if (paintingSupported()) {
     CSS.highlights.set(ACTIVE_NAME, new Highlight(range))
     clearTimeout(flashTimer)
     flashTimer = setTimeout(() => CSS.highlights.delete(ACTIVE_NAME), 1_800)

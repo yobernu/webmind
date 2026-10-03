@@ -7,12 +7,23 @@ export function hostnameOf(url: string): string {
   }
 }
 
-/** Pages that extensions are not allowed to read or inject into. */
+/** Stores and account pages where browsers refuse to run extensions. */
+const PROTECTED_HOSTS = [
+  'https://chromewebstore.google.com',
+  'https://chrome.google.com/webstore',
+  'https://addons.mozilla.org',
+  'https://accounts-static.cdn.mozilla.net',
+]
+
+/** Pages that extensions are not allowed to read or inject into, in Chrome
+ * and Firefox. */
 export function isRestrictedUrl(url: string): boolean {
   return (
     !url ||
-    /^(chrome|chrome-extension|edge|about|devtools|view-source|file):/i.test(url) ||
-    url.startsWith('https://chromewebstore.google.com')
+    /^(chrome|chrome-extension|chrome-untrusted|edge|about|devtools|view-source|file|moz-extension|resource|data|blob|javascript):/i.test(
+      url,
+    ) ||
+    PROTECTED_HOSTS.some((host) => url.startsWith(host))
   )
 }
 

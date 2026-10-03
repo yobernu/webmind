@@ -23,6 +23,7 @@ import {
 import { LONG_QUOTE, LONG_URL, RTL_TEXT } from "./fixtures";
 import "./gallery.css";
 import PagePreview from "./PagePreview";
+import StoreShot from "./StoreShot";
 import { screens } from "./screens";
 
 /**
@@ -189,6 +190,10 @@ function Primitives() {
 }
 
 export default function Gallery() {
+  if (ONLY === "store") {
+    return <StoreShot index={Number(params.get("shot") ?? 0)} />;
+  }
+
   if (ONLY === "page") {
     return (
       <div className="gallery">

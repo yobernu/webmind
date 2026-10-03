@@ -7,7 +7,7 @@ import type {
 } from '../types'
 import { buildTextIndex, describeRange } from '../utils/anchor'
 import { snapshotDocument } from '../utils/page'
-import { paintHighlights, scrollToHighlight } from './highlighter'
+import { paintHighlights, paintingSupported, scrollToHighlight } from './highlighter'
 import { createSelectionToolbar, type SelectionToolbar } from './toolbar'
 
 // Runs on every page, so it stays deliberately small: it answers page-context
@@ -38,7 +38,10 @@ function main(): void {
           respond({ ok: true, data: snapshotDocument() satisfies PageSnapshot })
           return false
         case 'PAINT_HIGHLIGHTS':
-          respond({ ok: true, data: { missing: paintHighlights(message.highlights) } })
+          respond({
+            ok: true,
+            data: { missing: paintHighlights(message.highlights), supported: paintingSupported() },
+          })
           return false
         case 'SCROLL_TO_HIGHLIGHT':
           respond({ ok: scrollToHighlight(message.id) })
