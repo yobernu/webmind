@@ -7,8 +7,10 @@ Publishing on addons.mozilla.org (AMO) is free. You need the API running first (
 ```sh
 cd apps/extension
 pnpm build:firefox
-pnpm start:firefox     # opens a temporary Firefox profile with Gloss AI loaded
+pnpm start:firefox     # opens Firefox with Gloss AI loaded
 ```
+
+`start:firefox` keeps its own Firefox profile in `apps/extension/.firefox-profile` (gitignored), so you stay signed in between runs. It lives in the project rather than in `/tmp` because Ubuntu's snap Firefox can't read `/tmp` and reports "Your Firefox profile cannot be loaded". Delete the folder for a fresh profile.
 
 You can also go to `about:debugging` → **This Firefox** → **Load Temporary Add-on…** and pick `dist-firefox/manifest.json`.
 
