@@ -1,0 +1,47 @@
+# Runs only when the extension (apps/extension) changes.
+name: Extension
+
+on:
+  push:
+    branches: [master]
+    paths: ['apps/extension/**', '.github/workflows/extension.yml']
+  pull_request:
+    paths: ['apps/extension/**', '.github/workflows/extension.yml']
+
+defaults:
+  run:
+    working-directory: apps/extension
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm's version comes from "packageManager" in the root package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/extension/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+
+      # Builds dist/ (Chrome) and dist-firefox/, then runs Mozilla's validator.
+      - run: pnpm build:firefox
+      - run: pnpm lint:firefox
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-builds
+          path: |
+            apps/extension/dist
+            apps/extension/dist-firefox
+          retention-days: 14

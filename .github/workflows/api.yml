@@ -1,0 +1,58 @@
+# Runs only when the API (services/api) changes. Render deploys it separately
+# from master; this keeps master green before that happens.
+name: API
+
+on:
+  push:
+    branches: [master]
+    paths: ['services/api/**', '.github/workflows/api.yml']
+  pull_request:
+    paths: ['services/api/**', '.github/workflows/api.yml']
+
+defaults:
+  run:
+    working-directory: services/api
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Same image as docker-compose.yml: Postgres 16 with pgvector.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: webmind
+          POSTGRES_PASSWORD: webmind
+          POSTGRES_DB: webmind
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U webmind -d webmind"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://webmind:webmind@localhost:5432/webmind?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm's version comes from "packageManager" in the root package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: services/api/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - run: pnpm exec tsc --noEmit -p tsconfig.json
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm exec prisma migrate deploy
+      - run: pnpm test:e2e
+      - run: pnpm build

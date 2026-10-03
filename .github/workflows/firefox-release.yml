@@ -1,0 +1,71 @@
+# Publishes a new version of Gloss AI to addons.mozilla.org.
+#
+# Push a tag named extension-v<version> (matching "version" in
+# apps/extension/public/manifest.json), or run it by hand from the Actions
+# tab. The first version must be submitted manually on AMO; this workflow
+# uploads every version after that. Setup: project_docs/firefox/SUBMITTING.md.
+name: Firefox release
+
+on:
+  push:
+    tags: ['extension-v*']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: amo
+
+    defaults:
+      run:
+        working-directory: apps/extension
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/extension/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check the tag matches the manifest version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(node -p "require('./public/manifest.json').version")
+          if [ "extension-v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match manifest version $version"
+            exit 1
+          fi
+
+      # Builds against .env.production, unless the repository variable
+      # VITE_API_BASE_URL overrides it. Refuses a localhost API.
+      - name: Build, validate and package
+        env:
+          API_URL: ${{ vars.VITE_API_BASE_URL }}
+        run: |
+          if [ -n "$API_URL" ]; then export VITE_API_BASE_URL="$API_URL"; fi
+          pnpm package:firefox
+
+      - name: Submit to addons.mozilla.org
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          version=$(node -p "require('./public/manifest.json').version")
+          pnpm exec web-ext sign \
+            --source-dir dist-firefox \
+            --artifacts-dir web-ext-artifacts \
+            --channel listed \
+            --upload-source-code "web-ext-artifacts/gloss_ai-$version-source.zip" \
+            --approval-timeout 0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firefox-release
+          path: apps/extension/web-ext-artifacts

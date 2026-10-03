@@ -47,7 +47,33 @@ The add-on ID `gloss-ai@yobernu.dev` is now permanent. Every future version must
 
 - **Automated validation** runs at once. A listed add-on is usually public within minutes to a day, and human review can follow later.
 - **If a reviewer asks for changes,** reply in the developer hub, rebuild and upload a new version.
-- **Updates:** raise `version` in `public/manifest.json`, run `pnpm package:firefox`, then go to the developer hub → Gloss AI → **Upload New Version**. Installed copies update automatically.
+- **Updates:** see the next section. Installed copies update automatically.
+
+## 5. Later versions: release from GitHub
+
+After the first version is on AMO, `.github/workflows/firefox-release.yml` publishes each new version. It builds the add-on, validates it, and uploads it to AMO together with its source archive.
+
+**One-time setup**
+
+1. On AMO, open [Manage API Keys](https://addons.mozilla.org/developers/addon/api/key/) and generate credentials: a *JWT issuer* and a *JWT secret*.
+2. On GitHub, open `yobernu/webmind` → **Settings → Environments → New environment**, and name it `amo`. Add two **secrets**:
+   - `AMO_JWT_ISSUER`
+   - `AMO_JWT_SECRET`
+
+   The workflow runs in this environment, so you can require your approval before each release.
+3. Optional: under **Settings → Secrets and variables → Actions → Variables**, add `VITE_API_BASE_URL` if the API URL differs from `apps/extension/.env.production`.
+
+**Each release**
+
+```sh
+# 1. raise "version" in apps/extension/public/manifest.json (e.g. 0.1.1), commit, push
+git tag extension-v0.1.1
+git push origin extension-v0.1.1
+```
+
+The workflow refuses a tag that doesn't match the manifest version. It uploads the new version and doesn't wait for review; follow its progress in the AMO developer hub. You can also start it from the Actions tab (**Firefox release → Run workflow**).
+
+The other two workflows run tests on every push or pull request that touches their folder: `api.yml` for `services/api`, `extension.yml` for `apps/extension`.
 
 ## Chrome Web Store, later
 
