@@ -26,7 +26,7 @@ You don't need to create anything in the database. The first deploy runs the mig
 ## 2. API on Render
 
 1. Merge into `master` and push. `render.yaml` deploys the `master` branch; while testing a branch, change `branch:` there.
-2. In the Render dashboard choose **New → Blueprint** and connect `yobernu/webmind`. Render reads `render.yaml` from the repository root and proposes a web service called `gloss-ai-api`.
+2. In the Render dashboard choose **New → Blueprint** and connect `yobernu/webmind`. Render reads `render.yaml` from the repository root and proposes a web service called `gloss-ai`.
 
    It's a monorepo, and the blueprint already handles that:
    - `rootDir: services/api` builds only the API.
@@ -49,7 +49,7 @@ You don't need to create anything in the database. The first deploy runs the mig
 4. Apply the blueprint. The first build takes a few minutes. When it finishes, open:
 
    ```
-   https://gloss-ai-api.onrender.com/health
+   https://gloss-ai.onrender.com/health
    ```
 
    It should answer `{"status":"ok"}`.

@@ -5,7 +5,7 @@
 
 services:
   - type: web
-    name: gloss-ai-api
+    name: gloss-ai
     runtime: node
     plan: free
     # Closest Render region to East Africa; change to suit your users.
