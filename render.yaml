@@ -10,7 +10,17 @@ services:
     plan: free
     # Closest Render region to East Africa; change to suit your users.
     region: frankfurt
+    # Monorepo: the API lives in services/api. Render builds from there, and
+    # the build filter skips deploys for commits that only touch the
+    # extension or the docs.
+    branch: master
     rootDir: services/api
+    buildFilter:
+      paths:
+        - services/api/**
+      ignoredPaths:
+        - services/api/**/*.md
+        - services/api/test/**
     # NODE_ENV stays unset during the build so dev dependencies (Nest CLI,
     # Prisma CLI) are installed; production mode is set at start.
     buildCommand: npm install -g pnpm@10.33.0 && pnpm install --frozen-lockfile && pnpm exec prisma generate && pnpm build
@@ -23,8 +33,12 @@ services:
       - key: NODE_VERSION
         value: "22"
 
-      # Neon's *direct* (non-pooled) connection string, with sslmode=require.
+      # Neon: the *pooled* connection string (host contains "-pooler") for
+      # the running API, and the *direct* one for migrations. Both end in
+      # ?sslmode=require.
       - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_DATABASE_URL
         sync: false
 
       # Render generates these once: 256-bit, base64. Rotating

@@ -1,24 +1,20 @@
 {
-  "name": "webmind",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "name": "gloss-ai",
+  "private": true,
+  "description": "Gloss AI monorepo: the browser extension (apps/extension) and its API (services/api). Each has its own dependencies and lockfile; these scripts only delegate.",
   "packageManager": "pnpm@10.33.0",
-  "dependencies": {
-    "@nestjs/config": "^12.0.0",
-    "@nestjs/passport": "^12.0.0",
-    "class-transformer": "^0.5.1",
-    "class-validator": "^0.15.1",
-    "passport": "^0.7.0",
-    "passport-jwt": "^4.0.1"
+  "engines": {
+    "node": ">=22"
   },
-  "devDependencies": {
-    "@types/passport-jwt": "^4.0.1"
+  "scripts": {
+    "install:all": "pnpm --dir services/api install && pnpm --dir apps/extension install",
+    "dev:api": "pnpm --dir services/api start:dev",
+    "dev:extension": "pnpm --dir apps/extension dev",
+    "test": "pnpm --dir services/api test && pnpm --dir apps/extension test",
+    "test:e2e": "pnpm --dir services/api test:e2e",
+    "typecheck": "pnpm --dir services/api exec tsc --noEmit -p tsconfig.json && pnpm --dir apps/extension typecheck",
+    "build": "pnpm --dir services/api build && pnpm --dir apps/extension build",
+    "build:firefox": "pnpm --dir apps/extension build:firefox",
+    "package:firefox": "pnpm --dir apps/extension package:firefox"
   }
 }

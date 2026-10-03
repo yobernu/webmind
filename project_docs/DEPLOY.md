@@ -12,25 +12,32 @@ Allow about 20 minutes.
 1. Sign up at [neon.tech](https://neon.tech) and create a project named `gloss-ai`.
    - Postgres 16 or 17 both work.
    - Pick the region closest to your Render region: **AWS Europe Central (Frankfurt)** pairs with `render.yaml`.
-2. Open **Connect** and turn **off** connection pooling. Copy the *direct* connection string. It looks like:
+2. Open **Connect** and copy two connection strings:
 
-   ```
-   postgresql://neondb_owner:…@ep-xxxx.eu-central-1.aws.neon.tech/neondb?sslmode=require
-   ```
+   | Copy with pooling | Looks like | Goes into |
+   | --- | --- | --- |
+   | **On** (pooled) | `postgresql://neondb_owner:…@ep-xxxx-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require` | `DATABASE_URL`: the running API |
+   | **Off** (direct) | the same without `-pooler` | `DIRECT_DATABASE_URL`: migrations |
 
-   Prisma's migrations need the direct connection; the pooled one breaks them.
+   Prisma's migrations take an advisory lock, which the pooler can't hold, so they need the direct string. `services/api/prisma.config.ts` picks it up automatically.
 
 You don't need to create anything in the database. The first deploy runs the migrations, including `CREATE EXTENSION vector`, which Neon supports.
 
 ## 2. API on Render
 
-1. Push the branch you want to deploy to GitHub. Render deploys from the repository, so merge into `master` first or pick the branch in step 3.
-2. In the Render dashboard choose **New → Blueprint** and connect the repository. Render reads `render.yaml` and proposes a web service called `gloss-ai-api`.
+1. Merge into `master` and push. `render.yaml` deploys the `master` branch; while testing a branch, change `branch:` there.
+2. In the Render dashboard choose **New → Blueprint** and connect `yobernu/webmind`. Render reads `render.yaml` from the repository root and proposes a web service called `gloss-ai-api`.
+
+   It's a monorepo, and the blueprint already handles that:
+   - `rootDir: services/api` builds only the API.
+   - The build filter skips deploys for commits that touch only the extension, the docs or the API's tests.
+   - The API has its own `pnpm-lock.yaml`, so nothing from `apps/extension` is installed.
 3. Fill in the values it asks for:
 
    | Variable | Value |
    | --- | --- |
-   | `DATABASE_URL` | The Neon direct connection string from step 1. |
+   | `DATABASE_URL` | Neon's **pooled** connection string from step 1. |
+   | `DIRECT_DATABASE_URL` | Neon's **direct** connection string from step 1. |
    | `GEMINI_API_KEY` | Optional. Enables Gemini answers and long-page search. |
    | `ANTHROPIC_API_KEY` | Optional. Enables Claude answers. |
    | `OPENROUTER_API_KEY` | Optional. |
