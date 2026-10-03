@@ -29,7 +29,7 @@ pnpm package:firefox
 
 This refuses to build against `localhost`, lints the add-on with Mozilla's own validator and writes two files to `web-ext-artifacts/`:
 
-- `gloss_ai-0.1.0.zip`: the add-on to upload.
+- `gloss_ai-0.1.0-firefox.zip`: the add-on to upload.
 - `gloss_ai-0.1.0-source.zip`: the source, for the reviewer. Commit your changes first so the archive matches the build.
 
 The validator reports **0 errors**. The warnings it shows are explained in `apps/extension/AMO_REVIEW.md`.
@@ -38,7 +38,7 @@ The validator reports **0 errors**. The warnings it shows are explained in `apps
 
 1. Sign in at [addons.mozilla.org/developers](https://addons.mozilla.org/developers/) with a Firefox account. AMO asks you to turn on two-step authentication before your first submission.
 2. Choose **Submit a New Add-on** → **On this site**. This is a listed add-on: AMO hosts it, signs it and delivers updates.
-3. Upload `gloss_ai-0.1.0.zip`. For platforms, select **Firefox** (desktop) only, because Android has no sidebar.
+3. Upload `gloss_ai-0.1.0-firefox.zip`, never a zip of `dist/`: that's the Chrome build, and AMO rejects it with "service_worker … without background/scripts" and "The add-on ID is required". For platforms, select **Firefox** (desktop) only, because Android has no sidebar.
 4. When asked whether you use a compiler, minifier or bundler, answer **Yes** and upload `gloss_ai-0.1.0-source.zip`.
 5. Fill in the listing from `project_docs/firefox/LISTING.md`: name, summary, description, categories, support details, privacy policy, screenshots and reviewer notes.
 6. Submit.
